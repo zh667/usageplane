@@ -8,7 +8,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { loadConfig, resolveHubToken } from "../core/config.js"
 import { dataDir, dbPath } from "../core/paths.js"
-import { Store } from "../core/store.js"
+import { Store, type SessionRow } from "../core/store.js"
 import type { UsageRecord } from "../core/types.js"
 import { listSessionsCached } from "../core/sessions.js"
 import { getAdapter } from "../relays/index.js"
@@ -117,7 +117,19 @@ export function createServer(dir = dataDir()): http.Server {
         return
       }
       if (url.pathname === "/api/sessions") {
-        json(res, 200, await listSessionsCached())
+        // Local file scan (freshest) merged with hub-synced session metadata
+        // from OTHER devices; each row carries its device.
+        const cfg = loadConfig(dir)
+        const local = (await listSessionsCached()).map((s) => ({ ...s, device_id: cfg.device }))
+        const store = new Store(dbPath(dir))
+        let remote
+        try {
+          remote = store.allSessionRows().filter((r) => r.device_id !== cfg.device)
+        } finally {
+          store.close()
+        }
+        const merged = [...local, ...remote].sort((a, b) => (b.ended_at ?? "").localeCompare(a.ended_at ?? ""))
+        json(res, 200, { device: cfg.device, sessions: merged })
         return
       }
       if (url.pathname === "/api/heatmap") {
@@ -162,7 +174,7 @@ export function createServer(dir = dataDir()): http.Server {
         }
         const store = new Store(dbPath(dir))
         try {
-          json(res, 200, { records: store.allRecords() })
+          json(res, 200, { records: store.allRecords(), sessions: store.allSessionRows() })
         } finally {
           store.close()
         }
@@ -180,7 +192,7 @@ export function createServer(dir = dataDir()): http.Server {
           return
         }
         const body = await readBody(req, MAX_INGEST_BYTES)
-        const payload = JSON.parse(body) as { records?: UsageRecord[] }
+        const payload = JSON.parse(body) as { records?: UsageRecord[]; sessions?: SessionRow[] }
         if (!Array.isArray(payload.records)) {
           json(res, 400, { error: "body must be {records: UsageRecord[]}" })
           return
@@ -188,7 +200,10 @@ export function createServer(dir = dataDir()): http.Server {
         const store = new Store(dbPath(dir))
         try {
           const upserted = store.upsertUsage(payload.records)
-          json(res, 200, { upserted, total: store.countRecords() })
+          const sessionsUpserted = Array.isArray(payload.sessions)
+            ? store.upsertSessionRows(payload.sessions)
+            : 0
+          json(res, 200, { upserted, sessions_upserted: sessionsUpserted, total: store.countRecords() })
         } finally {
           store.close()
         }

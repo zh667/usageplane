@@ -30,7 +30,42 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX idx_usage_hour ON usage_records (hour_start);
   CREATE INDEX idx_usage_tool ON usage_records (tool, hour_start);`,
+  // Session METADATA (titles are agent-authored; message bodies never stored).
+  // Synced between the user's own devices via the self-hosted hub.
+  `CREATE TABLE session_records (
+    device_id      TEXT NOT NULL,
+    tool           TEXT NOT NULL,
+    id             TEXT NOT NULL,
+    title          TEXT NOT NULL DEFAULT '',
+    project        TEXT NOT NULL DEFAULT '',
+    model          TEXT NOT NULL DEFAULT '',
+    started_at     TEXT,
+    ended_at       TEXT,
+    duration_ms    INTEGER NOT NULL DEFAULT 0,
+    total_tokens   INTEGER NOT NULL DEFAULT 0,
+    turns          INTEGER NOT NULL DEFAULT 0,
+    edits          INTEGER NOT NULL DEFAULT 0,
+    resume_command TEXT NOT NULL DEFAULT '',
+    updated_at     TEXT NOT NULL,
+    PRIMARY KEY (device_id, tool, id)
+  );`,
 ]
+
+export interface SessionRow {
+  device_id: string
+  tool: string
+  id: string
+  title: string
+  project: string
+  model: string
+  started_at: string | null
+  ended_at: string | null
+  duration_ms: number
+  total_tokens: number
+  turns: number
+  edits: number
+  resume_command: string
+}
 
 export interface ToolTotals {
   tool: string
@@ -274,6 +309,37 @@ export class Store {
   /** Every record, for pushing to an aggregation hub. */
   allRecords(): UsageRecord[] {
     return this.db.prepare("SELECT * FROM usage_records").all() as UsageRecord[]
+  }
+
+  /** Insert or replace session metadata rows (last write wins per key). */
+  upsertSessionRows(rows: SessionRow[]): number {
+    const stmt = this.db.prepare(`
+      INSERT INTO session_records (
+        device_id, tool, id, title, project, model, started_at, ended_at,
+        duration_ms, total_tokens, turns, edits, resume_command, updated_at
+      ) VALUES (
+        @device_id, @tool, @id, @title, @project, @model, @started_at, @ended_at,
+        @duration_ms, @total_tokens, @turns, @edits, @resume_command, @updated_at
+      )
+      ON CONFLICT (device_id, tool, id) DO UPDATE SET
+        title = excluded.title, project = excluded.project, model = excluded.model,
+        started_at = excluded.started_at, ended_at = excluded.ended_at,
+        duration_ms = excluded.duration_ms, total_tokens = excluded.total_tokens,
+        turns = excluded.turns, edits = excluded.edits,
+        resume_command = excluded.resume_command, updated_at = excluded.updated_at
+    `)
+    const updatedAt = new Date().toISOString()
+    const run = this.db.transaction((rs: SessionRow[]) => {
+      for (const r of rs) stmt.run({ ...r, updated_at: updatedAt })
+      return rs.length
+    })
+    return run(rows)
+  }
+
+  allSessionRows(): SessionRow[] {
+    return this.db
+      .prepare("SELECT * FROM session_records ORDER BY ended_at DESC")
+      .all() as SessionRow[]
   }
 
   countRecords(): number {

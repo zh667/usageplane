@@ -25,8 +25,10 @@ export async function runPush(urlArg?: string): Promise<void> {
 
   const store = new Store(dbPath(dir))
   let records
+  let sessions
   try {
     records = store.allRecords()
+    sessions = store.allSessionRows()
   } finally {
     store.close()
   }
@@ -39,7 +41,7 @@ export async function runPush(urlArg?: string): Promise<void> {
   const res = await fetch(endpoint, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify({ records }),
+    body: JSON.stringify({ records, sessions }),
   })
   if (!res.ok) {
     const text = await res.text().catch(() => "")

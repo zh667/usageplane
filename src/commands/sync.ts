@@ -2,6 +2,7 @@ import { collectClaudeCode } from "../collectors/claude-code.js"
 import { collectCodex } from "../collectors/codex.js"
 import { loadConfig } from "../core/config.js"
 import { dataDir, dbPath } from "../core/paths.js"
+import { listSessions } from "../core/sessions.js"
 import { Store } from "../core/store.js"
 
 /** Run all enabled collectors and upsert their buckets into the local store. */
@@ -26,6 +27,13 @@ export async function runSync(): Promise<void> {
         console.warn(`skipping unknown collector "${collector}" (available: claude-code, codex)`)
       }
     }
+    // Session metadata (titles etc. — never message bodies) is stored so
+    // push can sync it to the hub and other devices can browse it.
+    const sessions = await listSessions()
+    const nSessions = store.upsertSessionRows(
+      sessions.map((s) => ({ ...s, device_id: cfg.device })),
+    )
+    console.log(`sessions: ${nSessions} synced`)
     console.log(`done — ${total} buckets, database now holds ${store.countRecords()} records`)
   } finally {
     store.close()

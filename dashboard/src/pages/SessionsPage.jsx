@@ -73,9 +73,15 @@ export default function SessionsPage() {
   const [age, setAge] = useState("all")
   const [q, setQ] = useState("")
   const [devices, setDevices] = useState([])
+  const [selfDevice, setSelfDevice] = useState("")
 
   useEffect(() => {
-    getJson("/api/sessions").then(setSessions).catch(setErr)
+    getJson("/api/sessions")
+      .then((d) => {
+        setSelfDevice(d.device ?? "")
+        setSessions(d.sessions ?? [])
+      })
+      .catch(setErr)
     getJson("/api/summary").then((s) => setDevices(s.devices ?? [])).catch(() => {})
   }, [])
 
@@ -138,7 +144,17 @@ export default function SessionsPage() {
               title={s.tool}
             />
             <div className="min-w-0 flex-1">
-              <div className="truncate text-[14px] font-medium">{s.title}</div>
+              <div className="flex items-center gap-2">
+                <span className="truncate text-[14px] font-medium">{s.title}</span>
+                {s.device_id && s.device_id !== selfDevice && (
+                  <span
+                    className="shrink-0 rounded-full bg-oai-gray-100 px-2 py-0.5 text-[10px] text-oai-gray-500 dark:bg-oai-gray-800"
+                    title={`此会话在 ${s.device_id} 上,resume 命令需在那台机器执行`}
+                  >
+                    {s.device_id}
+                  </span>
+                )}
+              </div>
               <div className="mt-0.5 text-[12px] text-oai-gray-400">
                 {[s.project || "—", s.model, fmtDate(s.ended_at), fmtDuration(s.duration_ms)].join(" · ")}
               </div>

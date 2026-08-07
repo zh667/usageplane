@@ -127,6 +127,34 @@ test("/api/ingest: 403 without hub token config, 401 with bad token, upserts wit
   })
 })
 
+test("session metadata flows: ingest → export → /api/sessions shows remote device rows", async () => {
+  const dir = seededDir()
+  fs.writeFileSync(path.join(dir, "usageplane.yaml"), "device: hub-dev\nhub:\n  token: s3cret\n")
+  await withServer(dir, async (base) => {
+    const session = {
+      device_id: "windows-pc", tool: "codex", id: "s-1", title: "Refactor parser",
+      project: "p", model: "gpt-5.4", started_at: "2026-08-07T09:00:00Z",
+      ended_at: "2026-08-07T10:00:00Z", duration_ms: 3600000, total_tokens: 100,
+      turns: 3, edits: 1, resume_command: "codex resume s-1",
+    }
+    const ok = await fetch(`${base}/api/ingest`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: "Bearer s3cret" },
+      body: JSON.stringify({ records: [], sessions: [session] }),
+    })
+    assert.equal((await ok.json()).sessions_upserted, 1)
+
+    const exported = await fetch(`${base}/api/export`, { headers: { authorization: "Bearer s3cret" } }).then((r) => r.json())
+    assert.equal(exported.sessions.length, 1)
+
+    const merged = await fetch(`${base}/api/sessions`).then((r) => r.json())
+    assert.equal(merged.device, "hub-dev")
+    const remote = merged.sessions.find((s: { id: string }) => s.id === "s-1")
+    assert.equal(remote?.device_id, "windows-pc")
+    assert.equal(remote?.title, "Refactor parser")
+  })
+})
+
 test("/api/export mirrors ingest auth and returns the full record set", async () => {
   const dir = seededDir()
   await withServer(dir, async (base) => {

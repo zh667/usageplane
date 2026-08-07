@@ -1,6 +1,6 @@
 import { loadConfig, resolveHubToken } from "../core/config.js"
 import { dataDir, dbPath } from "../core/paths.js"
-import { Store } from "../core/store.js"
+import { Store, type SessionRow } from "../core/store.js"
 import type { UsageRecord } from "../core/types.js"
 
 /**
@@ -32,7 +32,7 @@ export async function runPull(urlArg?: string): Promise<void> {
     process.exitCode = 1
     return
   }
-  const payload = (await res.json()) as { records?: UsageRecord[] }
+  const payload = (await res.json()) as { records?: UsageRecord[]; sessions?: SessionRow[] }
   if (!Array.isArray(payload.records)) {
     console.error("pull failed: hub response has no records array")
     process.exitCode = 1
@@ -42,7 +42,10 @@ export async function runPull(urlArg?: string): Promise<void> {
   const store = new Store(dbPath(dir))
   try {
     const n = store.upsertUsage(payload.records)
-    console.log(`pulled ${n} buckets from hub — local database now holds ${store.countRecords()} records`)
+    const nSessions = Array.isArray(payload.sessions) ? store.upsertSessionRows(payload.sessions) : 0
+    console.log(
+      `pulled ${n} buckets + ${nSessions} session entries from hub — local database now holds ${store.countRecords()} records`,
+    )
   } finally {
     store.close()
   }

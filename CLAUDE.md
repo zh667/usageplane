@@ -50,7 +50,7 @@ total_tokens                = 以上各列之和 + output_tokens
 - 每条用量记录带 `source_kind: official_subscription | direct_api | relay | unknown`。不确定来源就归 `unknown`，绝不猜测归属。
 - `estimated_cost`（按官方单价估算）与 `reported_cost`（中转站实扣）分开存储，**任何界面都不得相加**。
 - 请求级"日志 ↔ 中转站账单"关联是可选功能，仅在用户显式绑定后启用。
-- **Privacy**: 只存 token 计数与元数据——永不存 prompt、消息或会话内容。
+- **Privacy**: 永不存储/传输 prompt、消息正文或会话内容。会话**元数据**（agent 自动生成的标题、计数、时长）可在用户自己的设备与自托管 hub 间同步（2026-08-07 用户决策）；将来官方托管 hub（多租户）上线时，会话元数据同步必须改为显式 opt-in。
 
 ### 工程约定
 
