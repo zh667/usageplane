@@ -27,7 +27,7 @@
 - ✅ new-api/one-api 通用适配器（移植自 all-api-hub `newApiFamily/default/` + `compatHeaders.ts`，AGPL 注明；注意上游目录已从其文档写的 `common/` 改名）：余额查询、user-id 兼容头扇出、quota÷500000 换算
 - ✅ 登录态方案：仅 access token（Bearer）认证（cookie 签到类推迟到 v0.2）
 - ✅ `usageplane relays` 命令：逐站查询，单站失败不中断整体
-- 🔨 验收：key 级口径已实站验证——查询值 0.333592 与网页后台完全一致（2026-08-07，1 个站点）；账户级余额待 access token，第二个站点待提供
+- 🔨 验收（范围调整为 1 个站点——用户仅有一个中转站）：key 级口径已实站验证，0.333592 与网页后台完全一致；账户级已查通（余额 ¥199.2064 / 已用 ¥0.7936），待与网页后台核对后关账
 
 ### M4 最小界面
 
