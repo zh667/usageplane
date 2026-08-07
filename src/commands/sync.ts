@@ -2,7 +2,9 @@ import { collectClaudeCode } from "../collectors/claude-code.js"
 import { collectCodex } from "../collectors/codex.js"
 import { loadConfig } from "../core/config.js"
 import { dataDir, dbPath } from "../core/paths.js"
+import { allLimits } from "../core/limits.js"
 import { listSessions } from "../core/sessions.js"
+import { listSkills } from "../core/skills.js"
 import { Store } from "../core/store.js"
 import { runPush } from "./push.js"
 
@@ -48,6 +50,21 @@ export async function runSync(opts: { quiet?: boolean } = {}): Promise<void> {
       )
       log(`sessions: ${nSessions} synced`)
     }
+    // Device-side metadata for the cross-device view: installed skills and
+    // subscription-limit snapshots (names and percentages — no secrets).
+    const skills = await listSkills()
+    store.replaceDeviceState(
+      cfg.device,
+      "skill",
+      skills.map((s) => ({ key: s.name, payload: JSON.stringify({ description: s.description, agents: s.agents }) })),
+    )
+    const limits = (await allLimits()).filter((p) => p.connected)
+    store.replaceDeviceState(
+      cfg.device,
+      "limit",
+      limits.map((p) => ({ key: p.id, payload: JSON.stringify(p) })),
+    )
+    log(`device state: ${skills.length} skills, ${limits.length} connected providers`)
     log(`done — ${total} buckets, database now holds ${store.countRecords()} records`)
   } finally {
     store.close()

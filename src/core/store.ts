@@ -49,7 +49,25 @@ const MIGRATIONS: string[] = [
     updated_at     TEXT NOT NULL,
     PRIMARY KEY (device_id, tool, id)
   );`,
+  // Generic per-device metadata synced via the hub (skills inventory, limit
+  // snapshots, …). kind+key identify the item, payload is JSON.
+  `CREATE TABLE device_state (
+    device_id  TEXT NOT NULL,
+    kind       TEXT NOT NULL,
+    key        TEXT NOT NULL,
+    payload    TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (device_id, kind, key)
+  );`,
 ]
+
+export interface DeviceStateRow {
+  device_id: string
+  kind: string
+  key: string
+  payload: string
+  updated_at?: string
+}
 
 export interface SessionRow {
   device_id: string
@@ -334,6 +352,37 @@ export class Store {
       return rs.length
     })
     return run(rows)
+  }
+
+  upsertDeviceState(rows: DeviceStateRow[]): number {
+    const stmt = this.db.prepare(`
+      INSERT INTO device_state (device_id, kind, key, payload, updated_at)
+      VALUES (@device_id, @kind, @key, @payload, @updated_at)
+      ON CONFLICT (device_id, kind, key) DO UPDATE SET
+        payload = excluded.payload, updated_at = excluded.updated_at
+    `)
+    const updatedAt = new Date().toISOString()
+    const run = this.db.transaction((rs: DeviceStateRow[]) => {
+      for (const r of rs) stmt.run({ updated_at: updatedAt, ...r })
+      return rs.length
+    })
+    return run(rows)
+  }
+
+  /** Replace a device's rows of one kind (removes items that disappeared locally). */
+  replaceDeviceState(deviceId: string, kind: string, rows: Omit<DeviceStateRow, "device_id" | "kind">[]): number {
+    const wipe = this.db.prepare("DELETE FROM device_state WHERE device_id = ? AND kind = ?")
+    const run = this.db.transaction(() => {
+      wipe.run(deviceId, kind)
+      return this.upsertDeviceState(rows.map((r) => ({ ...r, device_id: deviceId, kind })))
+    })
+    return run()
+  }
+
+  deviceState(kind?: string): DeviceStateRow[] {
+    return kind
+      ? (this.db.prepare("SELECT * FROM device_state WHERE kind = ?").all(kind) as DeviceStateRow[])
+      : (this.db.prepare("SELECT * FROM device_state").all() as DeviceStateRow[])
   }
 
   allSessionRows(): SessionRow[] {

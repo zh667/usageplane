@@ -9,12 +9,18 @@ const AGENT_LABELS = { "claude-code": "Claude", codex: "Codex" }
 
 export default function SkillsPage() {
   const [skills, setSkills] = useState(null)
+  const [selfDevice, setSelfDevice] = useState("")
   const [err, setErr] = useState(null)
   const [agent, setAgent] = useState("all")
   const [q, setQ] = useState("")
 
   useEffect(() => {
-    getJson("/api/skills").then(setSkills).catch(setErr)
+    getJson("/api/skills")
+      .then((d) => {
+        setSelfDevice(d.device ?? "")
+        setSkills(d.skills ?? [])
+      })
+      .catch(setErr)
   }, [])
 
   const agents = useMemo(
@@ -83,6 +89,17 @@ export default function SkillsPage() {
                     {AGENT_LABELS[a] ?? a}
                   </span>
                 ))}
+                {(s.devices ?? [])
+                  .filter((d) => d !== selfDevice)
+                  .map((d) => (
+                    <span
+                      key={d}
+                      title={`installed on ${d}`}
+                      className="rounded-full border border-oai-gray-200 px-2 py-0.5 text-[10px] text-oai-gray-400 dark:border-oai-gray-700"
+                    >
+                      {d}
+                    </span>
+                  ))}
               </span>
             </div>
             <p className="mt-1 line-clamp-2 max-w-4xl text-[13px] text-oai-gray-500">{s.description || "—"}</p>

@@ -1,6 +1,6 @@
 import { loadConfig, resolveHubToken } from "../core/config.js"
 import { dataDir, dbPath } from "../core/paths.js"
-import { Store, type SessionRow } from "../core/store.js"
+import { Store, type DeviceStateRow, type SessionRow } from "../core/store.js"
 import type { UsageRecord } from "../core/types.js"
 
 /**
@@ -32,7 +32,11 @@ export async function runPull(urlArg?: string): Promise<void> {
     process.exitCode = 1
     return
   }
-  const payload = (await res.json()) as { records?: UsageRecord[]; sessions?: SessionRow[] }
+  const payload = (await res.json()) as {
+    records?: UsageRecord[]
+    sessions?: SessionRow[]
+    state?: DeviceStateRow[]
+  }
   if (!Array.isArray(payload.records)) {
     console.error("pull failed: hub response has no records array")
     process.exitCode = 1
@@ -43,8 +47,9 @@ export async function runPull(urlArg?: string): Promise<void> {
   try {
     const n = store.upsertUsage(payload.records)
     const nSessions = Array.isArray(payload.sessions) ? store.upsertSessionRows(payload.sessions) : 0
+    const nState = Array.isArray(payload.state) ? store.upsertDeviceState(payload.state) : 0
     console.log(
-      `pulled ${n} buckets + ${nSessions} session entries from hub — local database now holds ${store.countRecords()} records`,
+      `pulled ${n} buckets + ${nSessions} session entries + ${nState} device-state rows — local database now holds ${store.countRecords()} records`,
     )
   } finally {
     store.close()

@@ -155,6 +155,34 @@ test("session metadata flows: ingest → export → /api/sessions shows remote d
   })
 })
 
+test("device_state flows: ingest → export → /api/skills and /api/limits show remote devices", async () => {
+  const dir = seededDir()
+  fs.writeFileSync(path.join(dir, "usageplane.yaml"), "device: hub-dev\nhub:\n  token: s3cret\n")
+  await withServer(dir, async (base) => {
+    const state = [
+      { device_id: "windows-pc", kind: "skill", key: "cool-skill", payload: JSON.stringify({ description: "d", agents: ["codex"] }) },
+      { device_id: "windows-pc", kind: "limit", key: "codex", payload: JSON.stringify({ id: "codex", name: "Codex", connected: true, windows: [{ label: "5h", utilization: 30, resets_at: null }] }) },
+    ]
+    const ok = await fetch(`${base}/api/ingest`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: "Bearer s3cret" },
+      body: JSON.stringify({ records: [], state }),
+    })
+    assert.equal((await ok.json()).state_upserted, 2)
+
+    const skills = await fetch(`${base}/api/skills`).then((r) => r.json())
+    const remoteSkill = skills.skills.find((s: { name: string }) => s.name === "cool-skill")
+    assert.deepEqual(remoteSkill?.devices, ["windows-pc"])
+
+    const limits = await fetch(`${base}/api/limits`).then((r) => r.json())
+    const remoteProvider = limits.providers.find((p: { device_id: string; id: string }) => p.device_id === "windows-pc")
+    assert.equal(remoteProvider?.windows[0].utilization, 30)
+
+    const exported = await fetch(`${base}/api/export`, { headers: { authorization: "Bearer s3cret" } }).then((r) => r.json())
+    assert.equal(exported.state.length, 2)
+  })
+})
+
 test("/api/export mirrors ingest auth and returns the full record set", async () => {
   const dir = seededDir()
   await withServer(dir, async (base) => {

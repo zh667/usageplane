@@ -8,7 +8,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { loadConfig, resolveHubToken } from "../core/config.js"
 import { dataDir, dbPath } from "../core/paths.js"
-import { Store, type SessionRow } from "../core/store.js"
+import { Store, type DeviceStateRow, type SessionRow } from "../core/store.js"
 import type { UsageRecord } from "../core/types.js"
 import { allLimits } from "../core/limits.js"
 import { computeRowCost } from "../core/pricing.js"
@@ -160,11 +160,54 @@ export function createServer(dir = dataDir()): http.Server {
         return
       }
       if (url.pathname === "/api/limits") {
-        json(res, 200, await allLimits())
+        // Local live providers + hub-synced snapshots from other devices.
+        const cfg = loadConfig(dir)
+        const local = (await allLimits()).map((p) => ({ ...p, device_id: cfg.device }))
+        const store = new Store(dbPath(dir))
+        let remote: unknown[] = []
+        try {
+          remote = store
+            .deviceState("limit")
+            .filter((r) => r.device_id !== cfg.device)
+            .map((r) => ({ ...(JSON.parse(r.payload) as object), device_id: r.device_id }))
+        } finally {
+          store.close()
+        }
+        json(res, 200, { device: cfg.device, providers: [...local, ...remote] })
         return
       }
       if (url.pathname === "/api/skills") {
-        json(res, 200, await listSkills())
+        // Local scan merged with other devices' synced inventories, by name.
+        const cfg = loadConfig(dir)
+        const byName = new Map<string, { name: string; description: string; agents: string[]; devices: string[] }>()
+        for (const s of await listSkills()) {
+          byName.set(s.name, { ...s, devices: [cfg.device] })
+        }
+        const store = new Store(dbPath(dir))
+        try {
+          for (const r of store.deviceState("skill")) {
+            if (r.device_id === cfg.device) continue
+            const payload = JSON.parse(r.payload) as { description?: string; agents?: string[] }
+            const existing = byName.get(r.key)
+            if (existing) {
+              if (!existing.devices.includes(r.device_id)) existing.devices.push(r.device_id)
+              for (const a of payload.agents ?? []) if (!existing.agents.includes(a)) existing.agents.push(a)
+            } else {
+              byName.set(r.key, {
+                name: r.key,
+                description: payload.description ?? "",
+                agents: payload.agents ?? [],
+                devices: [r.device_id],
+              })
+            }
+          }
+        } finally {
+          store.close()
+        }
+        json(res, 200, {
+          device: cfg.device,
+          skills: [...byName.values()].sort((a, b) => a.name.localeCompare(b.name)),
+        })
         return
       }
       if (url.pathname === "/api/heatmap") {
@@ -212,7 +255,11 @@ export function createServer(dir = dataDir()): http.Server {
         }
         const store = new Store(dbPath(dir))
         try {
-          json(res, 200, { records: store.allRecords(), sessions: store.allSessionRows() })
+          json(res, 200, {
+            records: store.allRecords(),
+            sessions: store.allSessionRows(),
+            state: store.deviceState(),
+          })
         } finally {
           store.close()
         }
@@ -230,7 +277,11 @@ export function createServer(dir = dataDir()): http.Server {
           return
         }
         const body = await readBody(req, MAX_INGEST_BYTES)
-        const payload = JSON.parse(body) as { records?: UsageRecord[]; sessions?: SessionRow[] }
+        const payload = JSON.parse(body) as {
+          records?: UsageRecord[]
+          sessions?: SessionRow[]
+          state?: DeviceStateRow[]
+        }
         if (!Array.isArray(payload.records)) {
           json(res, 400, { error: "body must be {records: UsageRecord[]}" })
           return
@@ -241,7 +292,13 @@ export function createServer(dir = dataDir()): http.Server {
           const sessionsUpserted = Array.isArray(payload.sessions)
             ? store.upsertSessionRows(payload.sessions)
             : 0
-          json(res, 200, { upserted, sessions_upserted: sessionsUpserted, total: store.countRecords() })
+          const stateUpserted = Array.isArray(payload.state) ? store.upsertDeviceState(payload.state) : 0
+          json(res, 200, {
+            upserted,
+            sessions_upserted: sessionsUpserted,
+            state_upserted: stateUpserted,
+            total: store.countRecords(),
+          })
         } finally {
           store.close()
         }

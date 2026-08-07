@@ -35,11 +35,17 @@ function Bar({ window: w, mode }) {
 
 export default function LimitsPage() {
   const [providers, setProviders] = useState(null)
+  const [selfDevice, setSelfDevice] = useState("")
   const [err, setErr] = useState(null)
   const mode = getPref("limitsDisplay", "used")
 
   useEffect(() => {
-    getJson("/api/limits").then(setProviders).catch(setErr)
+    getJson("/api/limits")
+      .then((d) => {
+        setSelfDevice(d.device ?? "")
+        setProviders(d.providers ?? [])
+      })
+      .catch(setErr)
   }, [])
 
   if (err) return <div className="p-8 text-oai-gray-500">load failed: {String(err.message ?? err)}</div>
@@ -53,10 +59,21 @@ export default function LimitsPage() {
         <div className="up-nav-label px-0">USAGE LIMITS · {mode === "left" ? "LEFT" : "USED"}</div>
         {providers === null && <div className="p-6 text-oai-gray-400">loading…</div>}
         {providers?.map((p) => (
-          <div key={p.id} className="border-t border-oai-gray-100 py-4 first:border-t-0 dark:border-oai-gray-800">
+          <div
+            key={`${p.device_id}:${p.id}`}
+            className="border-t border-oai-gray-100 py-4 first:border-t-0 dark:border-oai-gray-800"
+          >
             <div className="flex items-center gap-2 text-[14px] font-medium">
               <span className="text-provider-claude">{ICONS[p.id] ?? "•"}</span>
               {p.name}
+              {p.device_id && p.device_id !== selfDevice && (
+                <span
+                  className="rounded-full bg-oai-gray-100 px-2 py-0.5 text-[10px] font-normal text-oai-gray-500 dark:bg-oai-gray-800"
+                  title={`来自 ${p.device_id} 的同步快照`}
+                >
+                  {p.device_id}
+                </span>
+              )}
             </div>
             {p.connected ? (
               <div className="mt-2">

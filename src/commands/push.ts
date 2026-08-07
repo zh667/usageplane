@@ -27,9 +27,11 @@ export async function runPush(urlArg?: string, opts: { quiet?: boolean } = {}): 
   const store = new Store(dbPath(dir))
   let records
   let sessions
+  let state
   try {
     records = store.allRecords()
     sessions = store.allSessionRows()
+    state = store.deviceState()
   } finally {
     store.close()
   }
@@ -42,7 +44,7 @@ export async function runPush(urlArg?: string, opts: { quiet?: boolean } = {}): 
   const res = await fetch(endpoint, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify({ records, sessions }),
+    body: JSON.stringify({ records, sessions, state }),
   })
   if (!res.ok) {
     const text = await res.text().catch(() => "")
