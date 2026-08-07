@@ -48,12 +48,13 @@ export async function listSessions(opts: { claudeHome?: string; codexHome?: stri
     const s = await scanClaudeSession(f).catch(() => null)
     if (s) sessions.push(s)
   }
+  const codexTitles = await loadCodexTitleIndex(codexHome)
   const seenCodex = new Set<string>()
   for (const f of codexFiles) {
     const id = codexSessionIdFromPath(f)
     if (id && seenCodex.has(id)) continue
     if (id) seenCodex.add(id)
-    const s = await scanCodexSession(f).catch(() => null)
+    const s = await scanCodexSession(f, codexTitles).catch(() => null)
     if (s) sessions.push(s)
   }
 
@@ -68,6 +69,7 @@ async function scanClaudeSession(filePath: string): Promise<SessionInfo | null> 
   const id = path.basename(filePath, ".jsonl")
   let title = ""
   let summary = ""
+  let aiTitle = ""
   let project = ""
   let model = ""
   let first: string | null = null
@@ -80,6 +82,13 @@ async function scanClaudeSession(filePath: string): Promise<SessionInfo | null> 
   for await (const line of rl) {
     if (!line) continue
     if (EDIT_TOOLS.test(line)) edits++
+    // Claude writes its own generated one-line title as an "ai-title" record;
+    // prefer it (agent-authored) over summary, then over the first user line.
+    if (!aiTitle && line.includes('"type":"ai-title"')) {
+      const obj = tryParse(line)
+      if (typeof obj?.aiTitle === "string") aiTitle = obj.aiTitle.replace(/\s+/g, " ").trim()
+      continue
+    }
     if (!summary && line.includes('"type":"summary"')) {
       const obj = tryParse(line)
       if (typeof obj?.summary === "string") summary = obj.summary
@@ -130,7 +139,7 @@ async function scanClaudeSession(filePath: string): Promise<SessionInfo | null> 
   return {
     id,
     tool: "claude-code",
-    title: summary || title || "(untitled session)",
+    title: aiTitle || summary || title || "(untitled session)",
     project,
     model: model || "unknown",
     started_at: first,
@@ -143,7 +152,25 @@ async function scanClaudeSession(filePath: string): Promise<SessionInfo | null> 
   }
 }
 
-async function scanCodexSession(filePath: string): Promise<SessionInfo | null> {
+/**
+ * Codex writes its own thread titles to ~/.codex/session_index.jsonl
+ * ({id, thread_name} lines) — agent-authored metadata, the same source
+ * TokenTracker uses. We never derive codex titles from message content.
+ */
+async function loadCodexTitleIndex(codexHome: string): Promise<Map<string, string>> {
+  const titles = new Map<string, string>()
+  const raw = await fs.readFile(path.join(codexHome, "session_index.jsonl"), "utf8").catch(() => "")
+  for (const line of raw.split("\n")) {
+    if (!line.trim()) continue
+    const obj = tryParse(line)
+    const id = typeof obj?.id === "string" ? obj.id : null
+    const name = typeof obj?.thread_name === "string" ? obj.thread_name.replace(/\s+/g, " ").trim() : ""
+    if (id && name) titles.set(id, name.slice(0, 120))
+  }
+  return titles
+}
+
+async function scanCodexSession(filePath: string, titles: Map<string, string>): Promise<SessionInfo | null> {
   const stream = fssync.createReadStream(filePath, { encoding: "utf8" })
   const rl = readline.createInterface({ input: stream, crlfDelay: Infinity })
 
@@ -190,7 +217,7 @@ async function scanCodexSession(filePath: string): Promise<SessionInfo | null> {
   return {
     id,
     tool: "codex",
-    title: project ? `Codex · ${project}` : "Codex session",
+    title: titles.get(id) || (project ? `Codex · ${project}` : "Codex session"),
     project,
     model: model || "unknown",
     started_at: first,

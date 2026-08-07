@@ -54,6 +54,10 @@ test("claude session: summary title, turns, edits, dedup, resume command", async
 test("codex session: delta tokens, model from turn_context, resume command", async () => {
   const { claudeHome, codexHome } = makeHomes()
   fs.writeFileSync(
+    path.join(codexHome, "session_index.jsonl"),
+    JSON.stringify({ id: CODEX_ID, thread_name: "Refactor the parser" }) + "\n",
+  )
+  fs.writeFileSync(
     path.join(codexHome, "sessions", "2026", "08", "07", `rollout-2026-08-07T09-00-00-${CODEX_ID}.jsonl`),
     [
       JSON.stringify({ type: "session_meta", timestamp: "2026-08-07T09:00:00Z", payload: { cwd: "/home/x/codex-proj", model: "gpt-5.4" } }),
@@ -69,6 +73,7 @@ test("codex session: delta tokens, model from turn_context, resume command", asy
   assert.equal(sessions.length, 1)
   const s = sessions[0]
   assert.equal(s.tool, "codex")
+  assert.equal(s.title, "Refactor the parser", "title comes from Codex's own session_index.jsonl")
   assert.equal(s.project, "codex-proj")
   assert.equal(s.model, "gpt-5.4")
   assert.equal(s.total_tokens, 110, "60 non-cached input + 40 cached + 10 output")
