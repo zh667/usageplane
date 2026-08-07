@@ -62,7 +62,7 @@
 
 - ✅ 前端栈迁移（2026-08-07）：React+Vite+Tailwind 与上游同栈；oai 设计令牌（绿调灰阶/森林绿/72px display）、侧边栏三分组布局、暗色 class 切换；`serve` 静态托管 dist + SPA 回退（未构建时退回旧内联页）
 - 🔨 常规用量页：范围切换/hero 大数字/工具占比卡/Daily Breakdown 全列/模型排名/活动热力图/中转站侧卡已上线，**首屏即呈现真实双设备合并数据（Windows Codex 58.7% + VPS Claude 41.3%）**；余：成本估算接入、Project Usage 视图、Custom 范围、图标 SVG 化
-- ⬜ 会话页：会话列表（标题/项目/模型/时长/tokens/成本）+ Copy resume command
+- ✅ 会话页（2026-08-07）：Claude/Codex 会话扫描（summary 优先做标题、轮次/编辑数/token 去重统计、时长）、工具/时间/搜索筛选、Copy resume command；标题只供本机页面，绝不进 hub（隐私铁律）。成本列待定价引擎
 - ⬜ 限额页：Claude Max 5h/7d 窗口进度条（OAuth usage 端点 + 强制缓存退避），其余 provider 占位
 - ⬜ Skills 页：My Skills 列表（跨 agent 安装矩阵）；Browse 云端库推迟
 - ⬜ 设置页：Appearance 全量（主题/语言/货币/数字格式）、Account 占位、Limits Display

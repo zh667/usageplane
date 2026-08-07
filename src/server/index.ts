@@ -10,6 +10,7 @@ import { loadConfig, resolveHubToken } from "../core/config.js"
 import { dataDir, dbPath } from "../core/paths.js"
 import { Store } from "../core/store.js"
 import type { UsageRecord } from "../core/types.js"
+import { listSessionsCached } from "../core/sessions.js"
 import { getAdapter } from "../relays/index.js"
 import { DASHBOARD_HTML } from "./dashboard-html.js"
 
@@ -113,6 +114,10 @@ export function createServer(dir = dataDir()): http.Server {
         } finally {
           store.close()
         }
+        return
+      }
+      if (url.pathname === "/api/sessions") {
+        json(res, 200, await listSessionsCached())
         return
       }
       if (url.pathname === "/api/heatmap") {

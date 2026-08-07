@@ -220,7 +220,7 @@ async function parseRolloutFile({
   stream.close?.()
 }
 
-function extractTokenCount(obj: Record<string, unknown>): { info: unknown; timestamp: string | null } | null {
+export function extractTokenCount(obj: Record<string, unknown>): { info: unknown; timestamp: string | null } | null {
   if (obj.type !== "event_msg") return null
   const payload = obj.payload as Record<string, unknown> | undefined
   if (!payload) return null
