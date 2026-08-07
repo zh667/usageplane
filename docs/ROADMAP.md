@@ -67,6 +67,7 @@
 - ⬜ Skills 页：My Skills 列表（跨 agent 安装矩阵）；Browse 云端库推迟
 - ⬜ 设置页：Appearance 全量（主题/语言/货币/数字格式）、Account 占位、Limits Display
 - ⬜ 成本估算引擎：移植定价表；estimated 与 reported 永不相加
+- ⬜ **hooks 自动采集（对齐 TT 核心机制，用户定"按他的来"）**：`usageplane init` 向 Claude Code/Codex 配置安装钩子，每次 AI 使用自动触发 sync（+已配 hub 则自动 push）。取代手动 sync/cron——TT 的自动化靠事件钩子而非定时任务。移植参照：TT `src/lib/<provider>-hook.js` + `init.js`/`uninstall.js` 注册
 - 后备（本批次未排）：项目归属升级 git-root、Cursor/Gemini 采集器
 
 ## v0.5 — 中转站侧对齐批次（向 All API Hub 靠）
