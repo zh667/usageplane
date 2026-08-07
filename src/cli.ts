@@ -1,4 +1,5 @@
 import { runInit } from "./commands/init.js"
+import { runRelays } from "./commands/relays.js"
 import { runSync } from "./commands/sync.js"
 
 const HELP = `usageplane — one control plane for all your AI usage
@@ -8,6 +9,7 @@ Usage: usageplane <command>
 Commands:
   init      Create ~/.usageplane with a starter config and database
   sync      Parse client logs into the local database
+  relays    Query configured relay sites' balances
   status    (planned, M4) Print usage and relay-asset summary
   serve     (planned, M4) Local dashboard server
 
@@ -23,6 +25,9 @@ switch (command) {
     break
   case "sync":
     await runSync()
+    break
+  case "relays":
+    await runRelays()
     break
   case undefined:
   case "help":

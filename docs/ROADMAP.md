@@ -21,12 +21,13 @@
 - ✅ `usageplane sync` 命令：解析 `~/.claude` → 写入本地库
 - ✅ 验收通过：70 个真实日志文件对拍，token 六列全局+分模型误差全为 0（含 14 亿 cached tokens），总对话数一致；验收脚本固化在 `scripts/compare-claude-tokentracker.mts` 可随时重跑
 
-### M3 第一个中转站适配器：new-api 家族
+### M3 第一个中转站适配器：new-api 家族 🔨
 
-- ⬜ 适配器接口定稿：`supports: balance | usage_log | checkin | pricing` 能力声明
-- ⬜ new-api/one-api 通用适配器（参考 all-api-hub `src/services/apiService/common/`，AGPL 注明）：余额 + 总消费查询
-- ⬜ 登录态方案：先只支持 access token / API key 认证（cookie 签到类功能推迟到 v0.2）
-- 验收：对你实际在用的 2 个中转站能查到余额，数字与网页后台一致
+- ✅ 适配器接口定稿：`supports: balance | usage_log | checkin | pricing` 能力声明 + 注册表（`src/relays/types.ts`）
+- ✅ new-api/one-api 通用适配器（移植自 all-api-hub `newApiFamily/default/` + `compatHeaders.ts`，AGPL 注明；注意上游目录已从其文档写的 `common/` 改名）：余额查询、user-id 兼容头扇出、quota÷500000 换算
+- ✅ 登录态方案：仅 access token（Bearer）认证（cookie 签到类推迟到 v0.2）
+- ✅ `usageplane relays` 命令：逐站查询，单站失败不中断整体
+- ⬜ 验收：对实际在用的 2 个中转站能查到余额，数字与网页后台一致（待用户提供站点配置）
 
 ### M4 最小界面
 

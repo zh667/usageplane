@@ -14,6 +14,8 @@ export interface RelayConfig {
   token?: string
   /** Name of an environment variable holding the token. Wins over `token`. */
   token_env?: string
+  /** Site user id — sent as New-API-User/… compat headers; some forks require it. */
+  user_id?: number | string
 }
 
 export interface UsagePlaneConfig {
@@ -94,10 +96,13 @@ collectors:
   - claude-code
 
 # Relay sites. Prefer token_env over inline token to keep secrets out of this file.
+# user_id is the site's numeric user id (shown in the site's profile page);
+# some new-api forks require it as a header.
 relays: []
 #  - id: relay-a
 #    type: new-api
 #    base_url: https://relay-a.example.com
 #    token_env: RELAY_A_TOKEN
+#    user_id: 123
 `
 }
