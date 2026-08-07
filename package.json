@@ -12,7 +12,9 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "node --test test/"
+    "dev": "tsx src/cli.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test 'test/**/*.test.ts'"
   },
   "repository": {
     "type": "git",
@@ -28,5 +30,10 @@
     "one-api",
     "relay",
     "dashboard"
-  ]
+  ],
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "tsx": "^4.23.10",
+    "typescript": "^7.0.2"
+  }
 }
