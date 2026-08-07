@@ -1,0 +1,48 @@
+# 功能对齐地图
+
+> 定位原则（用户定，2026-08-07）：**假设我们的用户就是 TokenTracker 和 All API Hub 的用户是同一种人。**
+> 用量侧的功能与页面向 TokenTracker 靠，中转站侧向 All API Hub 靠——不盲目降级也不盲目升级。
+> 本文是逐功能的对照表；排期见 [ROADMAP.md](ROADMAP.md)。状态：✅ 已有 · 🔨 进行中 · ⬜ 规划 · 🔭 远期 · ✂️ 有意不做（须写理由）
+
+## 用量侧 ←对齐 TokenTracker
+
+| TokenTracker 功能 | 说明 | 我们 | 版本 |
+|---|---|---|---|
+| 多工具采集器（29 个） | Claude Code/Codex/Cursor/Gemini/Copilot… | ✅ 2 个（claude-code、codex）；按需求逐个移植，`port-collector` skill 已固化流程 | 持续 |
+| 本地 dashboard | localhost 网页，token/模型/项目统计 | ✅ 最小版；页面丰富度对齐见下面各行 | v0.1 |
+| 云端多设备聚合 | device-login → sync 自动上传 → 官网随处看 | 🔨 hub-push 已通（SSH 档）；官方托管档+link 命令待做 | v0.3 |
+| 成本估算（estimated cost） | 按官方单价估算美元成本，含缓存价差 | ⬜ 现在只显示 token 量；需移植定价表。铁律：estimated 与中转站 reported 永不相加 | v0.4 |
+| 订阅额度窗口 | Claude Max/Pro 5h/周窗口、13 家 provider 限额 | ⬜ | v0.4 |
+| 活动热力图 | GitHub 风格年度格子图 | ⬜ dashboard 对齐项 | v0.4 |
+| 会话/项目归属 | git 仓库级项目识别 | ✅ 简化版（cwd basename）；对齐 git-root 识别 | v0.4 |
+| Wrapped 年度报告 | `wrapped` 命令生成年度总结 | 🔭 | 远期 |
+| 成就系统（15 个） | 使用里程碑徽章 | 🔭 | 远期 |
+| 排行榜（opt-in） | 公开排行 + README 徽章 | 🔭 官方 hub 稳定后考虑 | 远期 |
+| 桌面托盘 App | Mac 菜单栏 + Windows 托盘 + Widget | 🔭 原生开发量大，TokenTracker 也是后期才做 | 远期 |
+| doctor/diagnostics | 环境自检命令 | ⬜ 采集器多了之后价值上升 | v0.5 |
+
+## 中转站侧 ←对齐 All API Hub
+
+| All API Hub 功能 | 说明 | 我们 | 版本 |
+|---|---|---|---|
+| 多站点余额/用量看板 | 按站点/账户的余额、消费、趋势 | ✅ 最小版（余额+总消费）；趋势图与今日消费待对齐 | v0.1 |
+| 站点架构适配（14+ 种） | new-api 家族及各不兼容变体 | ✅ new-api/one-api；Veloera/one-hub/Sub2API… 按 `relay-sites.md` 谱系逐个验证 | 持续 |
+| 双凭证支持 | access token / sk- key 两种口径 | ✅（上游没有的我们反而先做了 key 级口径） | v0.1 |
+| 今日用量/趋势 | `/api/log/self` 日志聚合、按模型统计 | ⬜ `supports: usage_log` 能力位已留 | v0.5 |
+| 自动签到 | 多站定时签到领额度 | ⬜ 难点：CLI 无浏览器登录态；能token化的站先做，纯 cookie 站评估后可能✂️ | v0.5 |
+| 模型价格对比 | 跨站同模型倍率对比 | ⬜ | v0.5 |
+| 可用性检测 | 站点健康检查、模型连通测试 | ⬜ | v0.5 |
+| Key 管理 | 列出/复制/创建 key | ⬜ | v0.5 |
+| 凭证导出 | 导出到 CherryStudio / CC Switch 等 | ⬜ 项目定位明确要做 | v0.5 |
+| 站点自动识别 | 粘贴 URL 自动判断架构类型 | ⬜ 降低配置门槛 | v0.5 |
+| WebDAV 配置备份 | 扩展配置的加密备份 | ✂️ 我们的配置随 hub 聚合走，不需要独立备份通道 | — |
+| 自建网关渠道管理 | new-api/AxonHub 管理端渠道运维 | 🔭 面向站长而非用户，观望 | 远期 |
+| 浏览器扩展形态 | 页面内注入、站点内快捷操作 | ✂️ 形态差异：我们是 CLI+网页；扩展形态若有需求另立项目 | — |
+
+## 我们独有（两边都没有的缝合价值）
+
+| 功能 | 说明 | 状态 |
+|---|---|---|
+| 用量+资产同屏 | 一个首页同时看"AI 编程用量"和"中转站资产"，口径分明永不相加 | ✅ v0.1 |
+| 数据主权分档 | 官方托管（零门槛）与自托管 hub（数据不出门）同协议并存 | ⬜ v0.3 |
+| 请求级核账（可选） | 日志↔账单对账；仅显式绑定+站点支持时启用 | 🔭 v2 观望 |

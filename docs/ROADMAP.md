@@ -1,6 +1,7 @@
 # UsagePlane 路线图
 
-> 定位与架构见 [ARCHITECTURE.md](ARCHITECTURE.md)。本文只管"接下来做什么、做到什么程度算完成"。
+> 定位与架构见 [ARCHITECTURE.md](ARCHITECTURE.md)；逐功能的上游对照见 [FEATURE-MAP.md](FEATURE-MAP.md)。本文只管"接下来做什么、做到什么程度算完成"。
+> 对齐原则：用量侧向 TokenTracker 靠、中转站侧向 All API Hub 靠——假设我们的用户就是他们的用户，不盲目增减功能。
 > 状态标记：⬜ 未开始 · 🔨 进行中 · ✅ 完成
 
 ## v0.1 — MVP：一台机器上能看到两类数据
@@ -40,15 +41,39 @@
 
 - ✅ Codex 采集器（2026-08-07）：移植 codex-token-usage 增量状态机（逐行 1:1）+ rollout 事件循环；cached-input 减除、fork 重放双守卫（突发间隙 + 跨日）、跨改写/归档去重；6 个合成夹具测试过。**对拍验收待 Windows 真实日志**（本机无 Codex 数据；Windows 装好后 push 上来即可核对）
 - ✅ 多设备聚合（2026-08-07）：hub 模式——常开设备（VPS）`serve` 暴露 `POST /api/ingest`（Bearer 共享 token，无 token 配置则 403 拒收），卫星设备 `usageplane push`；幂等 upsert 免合并冲突。回环 E2E 验证双推不翻倍；dashboard/status 增加按设备分组视图
-- ⬜ **云端模式（聚合首选，零门槛：默认假设用户没有 VPS）**——三档通道，同一套协议：
-  1. **官方托管 hub（默认档）**：项目方运营的多租户 hub，用户零服务器。UX 完全对齐 TokenTracker：装包 → `usageplane link`（配对码/设备流，隐式建账号，不强制邮箱注册）→ `sync` 自动上传 → 官方域名随处看。前置工作：多租户改造（账号与数据隔离——现有 hub 是单租户共享 token）、托管基础设施选型（自有 VPS 起步 vs InsForge/Supabase 类 BaaS，参考 TokenTracker 用 InsForge 的先例）、隐私声明（只收 token 计数与元数据，延续 privacy 铁律）
-  2. **自托管 hub（数据主权档）**：`usageplane hub init` 一条命令在自己 VPS 上起同款 hub，有 VPS 的用户（中转站玩家画像）data 不出门。协议与官方档完全相同
-  3. **SSH 隧道（备用档）**：云端不可用时降级、临时拉取某台远程机器用量
-  - 运营责任要认账：官方档意味着项目方承担服务器成本、在线率和别人数据的保管责任（AGPL 允许自营 SaaS）。初期可用现有 VPS 起步，量大再迁
+- ⬜ Codex 对拍验收：Windows 装好后 push 真实日志上来核对（v0.2 唯一悬项）
+
+## v0.3 — 云端三档（聚合首选，零门槛：默认假设用户没有 VPS）
+
+三档通道，同一套协议：
+
+1. **官方托管 hub（默认档）**：项目方运营的多租户 hub，用户零服务器。UX 完全对齐 TokenTracker：装包 → `usageplane link`（配对码/设备流，隐式建账号，不强制邮箱注册）→ `sync` 自动上传 → 官方域名随处看
+   - ⬜ 多租户改造：账号体系 + 按账号数据隔离（现有 hub 是单租户共享 token，这是 v0.3 最大工作量）
+   - ⬜ 托管基础设施：自有 VPS + 域名 + Let's Encrypt 起步；**上线第一天必须有异地备份和进程监控**；量大再迁 BaaS（Supabase/InsForge 类托管后端——换存储层不换产品代码，TokenTracker 用 InsForge 的先例）
+   - ⬜ 隐私声明：只收 token 计数与元数据，延续 privacy 铁律
+2. **自托管 hub（数据主权档）**：⬜ `usageplane hub init` 一条命令在自己 VPS 起同款 hub（systemd+HTTPS 全自动），数据不出门
+3. **SSH 隧道（备用档）**：✅ 已可用；云端不可用时降级、临时拉取某台远程机器用量
+
+## v0.4 — 用量侧对齐批次（向 TokenTracker 靠）
+
+细节见 FEATURE-MAP.md 用量侧表：
+
+- ⬜ 成本估算（estimated cost）：移植定价表，含缓存价差；与中转站 reported 永不相加
 - ⬜ 官方订阅额度窗口（Claude Max/Pro 的 5h/周窗口）
-- ⬜ 更多中转站架构：Veloera / one-hub（按 docs/relay-sites.md 谱系逐个验证）
+- ⬜ dashboard 对齐：活动热力图、按日趋势图
+- ⬜ 项目归属升级：cwd basename → git 仓库根识别
+- ⬜ 更多采集器（Cursor/Gemini 优先，按 port-collector skill 流程）
+
+## v0.5 — 中转站侧对齐批次（向 All API Hub 靠）
+
+细节见 FEATURE-MAP.md 中转站侧表：
+
+- ⬜ 今日用量/按模型统计（`/api/log/self`，`supports: usage_log` 能力位）
+- ⬜ 更多站点架构：Veloera / one-hub / Sub2API…（按 relay-sites.md 谱系逐个验证）
 - ⬜ 模型价格对比、可用性检测
-- ⬜ cookie 登录态 + 自动签到（评估 CLI 环境下的可行性，不行就砍）
+- ⬜ Key 管理（列出/复制/创建）与凭证导出（CherryStudio / CC Switch）
+- ⬜ 站点自动识别（粘贴 URL 判断架构类型）
+- ⬜ 自动签到（token 化可行的站先做；纯 cookie 站评估后可能有意不做）
 
 ## v2 — 观望区（明确不承诺）
 
