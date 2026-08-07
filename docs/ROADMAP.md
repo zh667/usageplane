@@ -40,6 +40,7 @@
 
 - ✅ Codex 采集器（2026-08-07）：移植 codex-token-usage 增量状态机（逐行 1:1）+ rollout 事件循环；cached-input 减除、fork 重放双守卫（突发间隙 + 跨日）、跨改写/归档去重；6 个合成夹具测试过。**对拍验收待 Windows 真实日志**（本机无 Codex 数据；Windows 装好后 push 上来即可核对）
 - ✅ 多设备聚合（2026-08-07）：hub 模式——常开设备（VPS）`serve` 暴露 `POST /api/ingest`（Bearer 共享 token，无 token 配置则 403 拒收），卫星设备 `usageplane push`；幂等 upsert 免合并冲突。回环 E2E 验证双推不翻倍；dashboard/status 增加按设备分组视图
+- ⬜ **云端模式（聚合首选）**：把 hub 经反代（Caddy/nginx）+ HTTPS 暴露公网，各设备直接 push、任意浏览器直接看 dashboard，无需隧道。应用层已就绪（Bearer token 认证、幂等 ingest），主要工作是反代配置文档 + token 强度校验 + 可选 IP 限流。SSH 隧道降为**备用通道**（云端不可用时、或临时拉取远程机器用量的场景）。依据：用户实测 TokenTracker 官方云端远程访问有问题，自托管云端可控性更好
 - ⬜ 官方订阅额度窗口（Claude Max/Pro 的 5h/周窗口）
 - ⬜ 更多中转站架构：Veloera / one-hub（按 docs/relay-sites.md 谱系逐个验证）
 - ⬜ 模型价格对比、可用性检测
@@ -63,3 +64,5 @@
 | 2026-08-07 | 货币符号是站点自选的显示配置（同一数值有站标 $ 有站标 ¥），底层单位恒为 quota/500000。relay.currency 只管显示，永不参与换算 |
 | 2026-08-07 | 多设备聚合选 hub-push 而非 WebDAV：VPS 常开当汇聚端，复用幂等 upsert 天然免冲突；卫星设备走 SSH 隧道推 127.0.0.1 绑定的 hub |
 | 2026-08-07 | port-collector skill 固化于 `.claude/skills/`（第二次移植前，按既定规则）；Codex 移植即其活体测试，流程全程可循 |
+| 2026-08-07 | 否掉照搬 TokenTracker 云端 SaaS（第三方托管+账号体系，与本地优先定位冲突），取其"设备推中心 API"骨架自托管实现 |
+| 2026-08-07 | 聚合通道排序（用户定）：**云端（公网 HTTPS hub）为首选，SSH 隧道为备用**。依据：TokenTracker 官方云端远程实测有问题；自托管云端数据仍在自己机器上。应用层协议不变，只是传输暴露方式升级 |
