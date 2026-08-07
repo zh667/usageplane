@@ -65,7 +65,7 @@
 - ✅ 会话页（2026-08-07）：Claude/Codex 会话扫描（summary 优先做标题、轮次/编辑数/token 去重统计、时长）、工具/时间/搜索筛选、Copy resume command；标题只供本机页面，绝不进 hub（隐私铁律）。成本列待定价引擎
 - ⬜ 限额页：Claude Max 5h/7d 窗口进度条（OAuth usage 端点 + 强制缓存退避），其余 provider 占位
 - ⬜ Skills 页：My Skills 列表（跨 agent 安装矩阵）；Browse 云端库推迟
-- ⬜ 设置页：Appearance 全量（主题/语言/货币/数字格式）、Account 占位、Limits Display
+- ✅ 设置页（2026-08-07）：Appearance（主题三态/货币/数字格式，实测生效）、Account（设备名+hub 状态+登录占位）、Limits Display（%used/%left 偏好，供 Limits 页用）、版本页脚。语言项有意推迟——UI 未做 i18n 前放一个不生效的选择器是假设置（TT 对齐的例外按"上游有而我们暂缺基建"处理）
 - ⬜ 成本估算引擎：移植定价表；estimated 与 reported 永不相加
 - ⬜ **hooks 自动采集（对齐 TT 核心机制，用户定"按他的来"）**：`usageplane init` 向 Claude Code/Codex 配置安装钩子，每次 AI 使用自动触发 sync（+已配 hub 则自动 push）。取代手动 sync/cron——TT 的自动化靠事件钩子而非定时任务。移植参照：TT `src/lib/<provider>-hook.js` + `init.js`/`uninstall.js` 注册
 - 后备（本批次未排）：项目归属升级 git-root、Cursor/Gemini 采集器

@@ -16,6 +16,26 @@ import { DASHBOARD_HTML } from "./dashboard-html.js"
 
 const MAX_INGEST_BYTES = 32 * 1024 * 1024
 
+const VERSION = (() => {
+  try {
+    const pkg = JSON.parse(
+      fs.readFileSync(fileURLToPath(new URL("../../package.json", import.meta.url)), "utf8"),
+    ) as { version?: string }
+    return pkg.version ?? "0.0.0"
+  } catch {
+    return "0.0.0"
+  }
+})()
+
+/** Hub token presence without throwing on unset token_env (summary must not 500). */
+function resolveHubTokenSafe(cfg: ReturnType<typeof loadConfig>): string | undefined {
+  try {
+    return resolveHubToken(cfg.hub)
+  } catch {
+    return undefined
+  }
+}
+
 // Built React dashboard (dashboard/dist). Falls back to the legacy inline
 // page when not built, so `npx tsx` from a fresh clone still shows something.
 const DIST_DIR = fileURLToPath(new URL("../../dashboard/dist", import.meta.url))
@@ -147,6 +167,9 @@ export function createServer(dir = dataDir()): http.Server {
         try {
           json(res, 200, {
             device: cfg.device,
+            hub_url: cfg.hub?.url ?? null,
+            hub_configured: Boolean(resolveHubTokenSafe(cfg)),
+            version: VERSION,
             generated_at: new Date().toISOString(),
             record_count: store.countRecords(),
             devices: store.totalsByDevice(),

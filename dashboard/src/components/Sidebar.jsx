@@ -1,6 +1,7 @@
 // Sidebar layout mirrors TokenTracker's: grouped nav (GENERAL / TOOLS /
 // ACCOUNT), theme toggle bottom-left, GitHub link bottom-right.
 import { NavLink } from "react-router-dom"
+import { setPref } from "../lib/prefs.js"
 
 const GROUPS = [
   {
@@ -22,8 +23,7 @@ const GROUPS = [
 ]
 
 function toggleTheme() {
-  const isDark = document.documentElement.classList.toggle("dark")
-  localStorage.setItem("usageplane-theme", isDark ? "dark" : "light")
+  setPref("theme", document.documentElement.classList.contains("dark") ? "light" : "dark")
 }
 
 export default function Sidebar() {

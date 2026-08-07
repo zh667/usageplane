@@ -1,5 +1,6 @@
 export function fmt(n) {
   const v = Number(n ?? 0)
+  if (localStorage.getItem("usageplane-numbers") === "full") return v.toLocaleString("en-US")
   if (v >= 1e9) return `${(v / 1e9).toFixed(1)}B`
   if (v >= 1e6) return `${(v / 1e6).toFixed(1)}M`
   if (v >= 1e3) return `${(v / 1e3).toFixed(1)}K`

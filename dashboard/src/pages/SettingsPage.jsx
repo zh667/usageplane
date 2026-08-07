@@ -1,8 +1,135 @@
-export default function SettingsPage() {
+// Mirrors TokenTracker SettingsPage: left sub-nav (Appearance / Account /
+// Limits Display), setting rows with title+description left and control
+// right, version footer.
+import { useEffect, useState } from "react"
+import { getJson } from "../lib/format.js"
+import { getPref, setPref } from "../lib/prefs.js"
+
+function Seg({ options, value, onChange }) {
   return (
-    <div className="p-4">
+    <div className="flex rounded-full border border-oai-gray-200 p-0.5 dark:border-oai-gray-800">
+      {options.map(([key, label]) => (
+        <button key={key} onClick={() => onChange(key)} className={`up-pill${value === key ? " active" : ""}`}>
+          {label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function Row({ title, desc, children }) {
+  return (
+    <div className="flex items-center justify-between gap-6 border-t border-oai-gray-100 py-4 first:border-t-0 dark:border-oai-gray-800">
+      <div>
+        <div className="text-[14px] font-medium">{title}</div>
+        <div className="mt-0.5 text-[12px] text-oai-gray-400">{desc}</div>
+      </div>
+      <div className="shrink-0">{children}</div>
+    </div>
+  )
+}
+
+const SECTIONS = [
+  ["appearance", "Appearance", "🎨"],
+  ["account", "Account", "👤"],
+  ["limits", "Limits Display", "⏱"],
+]
+
+export default function SettingsPage() {
+  const [section, setSection] = useState("appearance")
+  const [meta, setMeta] = useState(null)
+  // Preferences live in localStorage; this state only forces re-render.
+  const [, bump] = useState(0)
+  const set = (name, value) => {
+    setPref(name, value)
+    bump((n) => n + 1)
+  }
+
+  useEffect(() => {
+    getJson("/api/summary").then(setMeta).catch(() => {})
+  }, [])
+
+  return (
+    <div className="px-2">
       <h1 className="font-oai text-hero">Settings</h1>
-      <p className="mt-2 text-oai-gray-500">外观与账户 — 本批次施工中（见 docs/v0.4-usage-side.md）</p>
+
+      <div className="mt-6 grid gap-8 md:grid-cols-[200px_1fr]">
+        <nav>
+          {SECTIONS.map(([key, label, icon]) => (
+            <button
+              key={key}
+              onClick={() => setSection(key)}
+              className={`up-nav-item${section === key ? " active" : ""}`}
+            >
+              <span className="w-4 text-center text-[13px] opacity-70">{icon}</span>
+              {label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="up-card px-6 py-2">
+          {section === "appearance" && (
+            <>
+              <div className="up-nav-label px-0">APPEARANCE</div>
+              <Row title="Theme" desc="Choose how UsagePlane looks across the dashboard.">
+                <Seg
+                  options={[["light", "☀ Light"], ["dark", "🌙 Dark"], ["system", "🖥 System"]]}
+                  value={getPref("theme", "system")}
+                  onChange={(v) => set("theme", v)}
+                />
+              </Row>
+              <Row title="Currency" desc="Display currency for usage cost estimates (relay balances keep each site's own currency).">
+                <Seg
+                  options={[["USD", "USD ($)"], ["CNY", "CNY (¥)"]]}
+                  value={getPref("currency", "USD")}
+                  onChange={(v) => set("currency", v)}
+                />
+              </Row>
+              <Row title="Token numbers" desc="Apply K/M/B or full numbers everywhere.">
+                <Seg
+                  options={[["compact", "Compact"], ["full", "Full"]]}
+                  value={getPref("numbers", "compact")}
+                  onChange={(v) => set("numbers", v)}
+                />
+              </Row>
+            </>
+          )}
+
+          {section === "account" && (
+            <>
+              <div className="up-nav-label px-0">ACCOUNT</div>
+              <Row title="Device" desc="This device's name in the unified view (set in usageplane.yaml).">
+                <span className="font-mono text-[13px]">{meta?.device ?? "—"}</span>
+              </Row>
+              <Row title="Hub" desc="Aggregation hub this device pushes to / pulls from.">
+                <span className="font-mono text-[13px]">
+                  {meta?.hub_configured ? (meta?.hub_url ?? "本机即 hub") : "未配置"}
+                </span>
+              </Row>
+              <Row title="Sign in" desc="官方托管 hub 的账号体系随 v0.3 云端模式上线。">
+                <span className="text-[13px] text-oai-gray-400">coming in v0.3</span>
+              </Row>
+            </>
+          )}
+
+          {section === "limits" && (
+            <>
+              <div className="up-nav-label px-0">LIMITS DISPLAY</div>
+              <Row title="Progress bars" desc="Show subscription windows as percent used or percent left (applies to the Limits page).">
+                <Seg
+                  options={[["used", "% used"], ["left", "% left"]]}
+                  value={getPref("limitsDisplay", "used")}
+                  onChange={(v) => set("limitsDisplay", v)}
+                />
+              </Row>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-8 text-center text-[12px] text-oai-gray-400">
+        UsagePlane v{meta?.version ?? "…"} · <a className="hover:text-oai-gray-600" href="https://github.com/zh667/usageplane" target="_blank" rel="noreferrer">GitHub</a>
+      </div>
     </div>
   )
 }
