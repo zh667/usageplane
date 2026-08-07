@@ -60,8 +60,8 @@
 
 **逐页详细规格：[v0.4-usage-side.md](v0.4-usage-side.md)**（含实景截图核对的要素清单、后端端点、移植来源、验收标准）。概要：
 
-- ⬜ 前端栈迁移：React+Vite+Tailwind（与上游同栈），移植 oai 设计基建（字体/色板/侧边栏布局），MIT 组件直接搬
-- ⬜ 常规用量页：时间范围切换、hero 大数字+成本估算、Daily Breakdown、模型占比、活动热力图；保留中转站资产侧卡
+- ✅ 前端栈迁移（2026-08-07）：React+Vite+Tailwind 与上游同栈；oai 设计令牌（绿调灰阶/森林绿/72px display）、侧边栏三分组布局、暗色 class 切换；`serve` 静态托管 dist + SPA 回退（未构建时退回旧内联页）
+- 🔨 常规用量页：范围切换/hero 大数字/工具占比卡/Daily Breakdown 全列/模型排名/活动热力图/中转站侧卡已上线，**首屏即呈现真实双设备合并数据（Windows Codex 58.7% + VPS Claude 41.3%）**；余：成本估算接入、Project Usage 视图、Custom 范围、图标 SVG 化
 - ⬜ 会话页：会话列表（标题/项目/模型/时长/tokens/成本）+ Copy resume command
 - ⬜ 限额页：Claude Max 5h/7d 窗口进度条（OAuth usage 端点 + 强制缓存退避），其余 provider 占位
 - ⬜ Skills 页：My Skills 列表（跨 agent 安装矩阵）；Browse 云端库推迟

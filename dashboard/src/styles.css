@@ -1,0 +1,90 @@
+/* Base styles ported (trimmed) from TokenTracker dashboard/src/styles.css (MIT):
+   green-tinted neutrals, forest brand green, font stacks. Kept identical where
+   used so the two dashboards stay visually comparable side by side. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --oai-font-sans: -apple-system, blinkmacsystemfont, "Segoe UI", roboto, oxygen, ubuntu, sans-serif;
+  --oai-font-mono: "SF Mono", sfmono-regular, ui-monospace, menlo, monaco, consolas, monospace;
+}
+
+.dark {
+  color-scheme: dark;
+}
+
+body {
+  font-family: var(--oai-font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  @apply bg-oai-gray-100 text-oai-black;
+}
+
+.dark body {
+  @apply bg-oai-gray-950 text-oai-white;
+}
+
+/* Card surface used across all pages */
+.up-card {
+  @apply rounded-card border border-oai-gray-200 bg-white;
+}
+.dark .up-card {
+  @apply border-oai-gray-800 bg-oai-gray-900;
+}
+
+/* Sidebar item */
+.up-nav-item {
+  @apply flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[14px] text-oai-gray-700 hover:bg-oai-gray-200/60;
+}
+.dark .up-nav-item {
+  @apply text-oai-gray-300 hover:bg-oai-gray-800;
+}
+.up-nav-item.active {
+  @apply bg-oai-gray-200 font-medium text-oai-black;
+}
+.dark .up-nav-item.active {
+  @apply bg-oai-gray-800 text-oai-white;
+}
+
+/* Section label in sidebar */
+.up-nav-label {
+  @apply px-3 pb-1 pt-5 text-[11px] font-semibold uppercase tracking-wider text-oai-gray-400;
+}
+
+/* Pill segmented control (Day/Week/Month/Total) */
+.up-pill {
+  @apply rounded-full px-3.5 py-1.5 text-[13px] text-oai-gray-500 hover:text-oai-black;
+}
+.dark .up-pill {
+  @apply text-oai-gray-400 hover:text-oai-white;
+}
+.up-pill.active {
+  @apply bg-oai-gray-200 font-semibold text-oai-black;
+}
+.dark .up-pill.active {
+  @apply bg-oai-gray-800 text-oai-white;
+}
+
+/* Data table */
+.up-table {
+  @apply w-full border-collapse text-[13px];
+  font-variant-numeric: tabular-nums;
+}
+.up-table th {
+  @apply border-b border-oai-gray-200 px-2 py-2 text-left font-medium text-oai-gray-400;
+}
+.up-table td {
+  @apply border-b border-oai-gray-100 px-2 py-2.5;
+}
+.dark .up-table th {
+  @apply border-oai-gray-800;
+}
+.dark .up-table td {
+  @apply border-oai-gray-800/60;
+}
+.up-table .n {
+  @apply text-right;
+}

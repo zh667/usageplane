@@ -55,7 +55,7 @@ test("/api/summary aggregates tools, models, projects, days", async () => {
   })
 })
 
-test("/api/relays returns [] with no relays configured; / serves the dashboard; unknown 404s", async () => {
+test("/api/relays returns [] with no relays configured; / serves the dashboard; unknown api 404s", async () => {
   await withServer(seededDir(), async (base) => {
     const relays = await fetch(`${base}/api/relays`).then((r) => r.json())
     assert.deepEqual(relays, [])
@@ -63,10 +63,32 @@ test("/api/relays returns [] with no relays configured; / serves the dashboard; 
     const page = await fetch(base)
     assert.equal(page.status, 200)
     assert.match(page.headers.get("content-type") ?? "", /text\/html/)
-    assert.match(await page.text(), /UsagePlane/)
+    assert.match(await page.text(), /UsagePlane|root/)
 
-    const missing = await fetch(`${base}/nope`)
+    // SPA fallback: extension-less page routes serve the app shell…
+    const spa = await fetch(`${base}/sessions`)
+    assert.equal(spa.status, 200)
+    assert.match(spa.headers.get("content-type") ?? "", /text\/html/)
+    // …but unknown API endpoints still 404 as JSON.
+    const missing = await fetch(`${base}/api/nope`)
     assert.equal(missing.status, 404)
+  })
+})
+
+test("/api/usage aggregates a range with full columns; bad range 400s", async () => {
+  await withServer(seededDir(), async (base) => {
+    const usage = await fetch(`${base}/api/usage?range=total`).then((r) => r.json())
+    assert.equal(usage.totals.total_tokens, 60)
+    assert.equal(usage.totals.conversation_count, 4)
+    assert.equal(usage.tools[0].tool, "claude-code")
+    assert.equal(usage.days.length, 2)
+    assert.equal(typeof usage.active_days, "number")
+
+    const bad = await fetch(`${base}/api/usage?range=bogus`)
+    assert.equal(bad.status, 400)
+
+    const heat = await fetch(`${base}/api/heatmap`).then((r) => r.json())
+    assert.equal(heat.length, 2)
   })
 })
 

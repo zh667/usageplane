@@ -57,6 +57,20 @@ export interface DeviceTotals extends ToolTotals {
   device_id: string
 }
 
+export interface FullTotals {
+  input_tokens: number
+  output_tokens: number
+  cached_input_tokens: number
+  cache_creation_input_tokens: number
+  reasoning_output_tokens: number
+  total_tokens: number
+  conversation_count: number
+}
+
+export interface FullDayTotals extends FullTotals {
+  day: string
+}
+
 export class Store {
   private db: Database.Database
 
@@ -180,6 +194,67 @@ export class Store {
         GROUP BY tool, day ORDER BY day DESC LIMIT ?
       `)
       .all(days) as DayTotals[]
+  }
+
+  /**
+   * Aggregates for a time range (hour_start >= since; null = all time).
+   * Shapes match the dashboard's usage page needs.
+   */
+  rangeSummary(since: string | null): {
+    totals: FullTotals
+    tools: (ToolTotals & { cached_input_tokens: number })[]
+    models: ModelTotals[]
+    days: FullDayTotals[]
+  } {
+    const where = since ? "WHERE hour_start >= ?" : ""
+    const params = since ? [since] : []
+    const cols = `
+      SUM(input_tokens) AS input_tokens,
+      SUM(output_tokens) AS output_tokens,
+      SUM(cached_input_tokens) AS cached_input_tokens,
+      SUM(cache_creation_input_tokens) AS cache_creation_input_tokens,
+      SUM(reasoning_output_tokens) AS reasoning_output_tokens,
+      SUM(total_tokens) AS total_tokens,
+      SUM(conversation_count) AS conversation_count`
+    const totals = this.db
+      .prepare(`SELECT ${cols} FROM usage_records ${where}`)
+      .get(...params) as FullTotals
+    for (const k of Object.keys(totals) as (keyof FullTotals)[]) totals[k] = totals[k] ?? 0
+    return {
+      totals,
+      tools: this.db
+        .prepare(`SELECT tool, ${cols} FROM usage_records ${where} GROUP BY tool ORDER BY 7 DESC`)
+        .all(...params) as (ToolTotals & { cached_input_tokens: number })[],
+      models: this.db
+        .prepare(`SELECT tool, model, ${cols} FROM usage_records ${where} GROUP BY tool, model ORDER BY 8 DESC`)
+        .all(...params) as ModelTotals[],
+      days: this.db
+        .prepare(
+          `SELECT substr(hour_start, 1, 10) AS day, ${cols} FROM usage_records ${where} GROUP BY day ORDER BY day DESC LIMIT 31`,
+        )
+        .all(...params) as FullDayTotals[],
+    }
+  }
+
+  /** Per-day grand totals for the heatmap (last ~54 weeks). */
+  heatmapDays(): { day: string; total_tokens: number }[] {
+    return this.db
+      .prepare(`
+        SELECT substr(hour_start, 1, 10) AS day, SUM(total_tokens) AS total_tokens
+        FROM usage_records GROUP BY day ORDER BY day DESC LIMIT 378
+      `)
+      .all() as { day: string; total_tokens: number }[]
+  }
+
+  /** First recorded bucket start and count of distinct active days. */
+  activitySpan(): { started: string | null; active_days: number } {
+    return this.db
+      .prepare(`
+        SELECT MIN(hour_start) AS started,
+               COUNT(DISTINCT substr(hour_start, 1, 10)) AS active_days
+        FROM usage_records
+      `)
+      .get() as { started: string | null; active_days: number }
   }
 
   /** Per-device totals — the cross-device home view. */

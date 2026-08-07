@@ -2,7 +2,10 @@
 // src/lib/local-api.js (plain node:http, no framework) — MIT-inspired
 // structure, no code copied.
 
+import fs from "node:fs"
 import http from "node:http"
+import path from "node:path"
+import { fileURLToPath } from "node:url"
 import { loadConfig, resolveHubToken } from "../core/config.js"
 import { dataDir, dbPath } from "../core/paths.js"
 import { Store } from "../core/store.js"
@@ -11,6 +14,41 @@ import { getAdapter } from "../relays/index.js"
 import { DASHBOARD_HTML } from "./dashboard-html.js"
 
 const MAX_INGEST_BYTES = 32 * 1024 * 1024
+
+// Built React dashboard (dashboard/dist). Falls back to the legacy inline
+// page when not built, so `npx tsx` from a fresh clone still shows something.
+const DIST_DIR = fileURLToPath(new URL("../../dashboard/dist", import.meta.url))
+
+const MIME: Record<string, string> = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".ico": "image/x-icon",
+  ".woff2": "font/woff2",
+  ".json": "application/json; charset=utf-8",
+  ".map": "application/json",
+}
+
+/** Range key → since ISO (null = all time). Day is since UTC midnight; week/month are rolling. */
+function rangeSince(range: string): string | null | undefined {
+  const now = Date.now()
+  switch (range) {
+    case "day": {
+      const d = new Date(now)
+      return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())).toISOString()
+    }
+    case "week":
+      return new Date(now - 7 * 24 * 3600 * 1000).toISOString()
+    case "month":
+      return new Date(now - 30 * 24 * 3600 * 1000).toISOString()
+    case "total":
+      return null
+    default:
+      return undefined
+  }
+}
 
 const RELAY_CACHE_MS = 60_000
 
@@ -52,9 +90,38 @@ export function createServer(dir = dataDir()): http.Server {
   return http.createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost")
     try {
-      if (url.pathname === "/") {
-        res.writeHead(200, { "content-type": "text/html; charset=utf-8" })
-        res.end(DASHBOARD_HTML)
+      if (url.pathname === "/api/usage") {
+        const since = rangeSince(url.searchParams.get("range") ?? "month")
+        if (since === undefined) {
+          json(res, 400, { error: "range must be day|week|month|total" })
+          return
+        }
+        const store = new Store(dbPath(dir))
+        try {
+          const summary = store.rangeSummary(since)
+          const last7d = store.rangeSummary(new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString()).totals
+          const last30d = store.rangeSummary(new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString()).totals
+          const span = store.activitySpan()
+          json(res, 200, {
+            ...summary,
+            last7d: last7d.total_tokens,
+            last30d: last30d.total_tokens,
+            daily_avg: Math.round(last30d.total_tokens / 30),
+            started: span.started,
+            active_days: span.active_days,
+          })
+        } finally {
+          store.close()
+        }
+        return
+      }
+      if (url.pathname === "/api/heatmap") {
+        const store = new Store(dbPath(dir))
+        try {
+          json(res, 200, store.heatmapDays())
+        } finally {
+          store.close()
+        }
         return
       }
       if (url.pathname === "/api/summary") {
@@ -106,11 +173,34 @@ export function createServer(dir = dataDir()): http.Server {
         json(res, 200, await relayStatuses())
         return
       }
+      if (req.method === "GET" && !url.pathname.startsWith("/api/")) {
+        serveStatic(res, url.pathname)
+        return
+      }
       json(res, 404, { error: "not found" })
     } catch (err) {
       json(res, 500, { error: err instanceof Error ? err.message : String(err) })
     }
   })
+}
+
+/** Serve the built SPA; unknown extension-less paths get index.html (client routing). */
+function serveStatic(res: http.ServerResponse, pathname: string): void {
+  const indexFile = path.join(DIST_DIR, "index.html")
+  if (!fs.existsSync(indexFile)) {
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" })
+    res.end(DASHBOARD_HTML)
+    return
+  }
+  const rel = path.normalize(decodeURIComponent(pathname)).replace(/^([/\\])+/, "")
+  const file = path.join(DIST_DIR, rel)
+  if (!file.startsWith(DIST_DIR)) {
+    json(res, 403, { error: "forbidden" })
+    return
+  }
+  const target = fs.existsSync(file) && fs.statSync(file).isFile() ? file : indexFile
+  res.writeHead(200, { "content-type": MIME[path.extname(target)] ?? "application/octet-stream" })
+  res.end(fs.readFileSync(target))
 }
 
 function readBody(req: http.IncomingMessage, limit: number): Promise<string> {
