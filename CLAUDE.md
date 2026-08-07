@@ -26,7 +26,15 @@ UsagePlane — a local-first control plane for AI coding usage, subscription lim
 
 ## 实现策略：先找轮子，再造轮子
 
-- 功能与 TokenTracker / all-api-hub 已有实现重合时，**优先移植或仿写上游代码**，不从零写——它们的实现踩过的坑都在代码里。
+### 设计决策先侦察上游（载荷级——已三次因违反返工）
+
+**假设我们的用户就是 TokenTracker 和 All API Hub 的用户。** 用量侧的一切（功能、页面、UX、机制、数据来源）默认答案在 TokenTracker 里；中转站侧默认答案在 all-api-hub 里。动手设计前先侦察上游怎么做的：读源码 + 实跑对照（TokenTracker 可在本机跑起来并排对比，`node bin/tracker.js serve --no-sync` → :7680）。自创设计只允许两种情况：上游没有该功能，或与我们独有定位（用量+资产缝合层、数据主权分档）冲突。逐功能台账：`docs/FEATURE-MAP.md`。
+
+引以为戒的三次返工：自动采集提议 cron → 上游用 **hooks**（init 装进 AI 工具配置，事件驱动）；云端 UX 让用户手配反代 → 上游是 **device-login 命令流**（运维包进命令）；Codex 会话标题从内容拼 → 上游读 **session_index.jsonl**（agent 自写的元数据）。共性：先问"TokenTracker/AAH 是怎么做的"，再动键盘。
+
+### 代码复用
+
+- 功能与上游重合时，**优先移植或仿写上游代码**，不从零写——它们的实现踩过的坑都在代码里。
 - 其他功能先搜现有开源实现（GitHub / npm）。npm 有成熟维护的包就直接装依赖，连移植都省；只有参考价值的仓库浅克隆到 `~/projects/reference/<name>` 再移植。
 - 优先级：**成熟依赖 > 移植现有代码 > 自写**。自写只留给统一数据模型这类本项目的原创核心。
 - 复制任何代码前先查许可证与 AGPL-3.0 的兼容性：MIT / Apache-2.0 / BSD / MPL / (L)GPL / AGPL 可以复制（照 Upstream provenance 规则注明来源）；专有、无 LICENSE 或不兼容协议的**只能看思路重写，不能复制**。
