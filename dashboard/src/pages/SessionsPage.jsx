@@ -46,15 +46,37 @@ function CopyButton({ command }) {
   )
 }
 
+// Session files live on the device that ran the tool — the hub only receives
+// aggregated buckets. When a tool filter is empty because this device has no
+// local logs for it, say so and point at the device that does.
+function EmptyState({ tool, sessions, devices }) {
+  const localHasTool = tool !== "all" && sessions.some((s) => s.tool === tool)
+  const remoteWithTool = devices.filter((d) => d.tool === tool).map((d) => d.device_id)
+  if (tool !== "all" && !localHasTool && remoteWithTool.length > 0) {
+    return (
+      <div className="p-8 text-center text-oai-gray-400">
+        <div className="text-[14px]">本机没有 {tool} 的会话日志。</div>
+        <div className="mt-1 text-[13px]">
+          会话列表是本机功能（resume 命令只在有日志的机器上有效）——{tool} 的会话请在{" "}
+          <span className="font-medium text-oai-gray-500">{remoteWithTool.join(" / ")}</span> 上打开 dashboard 查看。
+        </div>
+      </div>
+    )
+  }
+  return <div className="p-8 text-center text-oai-gray-400">no sessions match</div>
+}
+
 export default function SessionsPage() {
   const [sessions, setSessions] = useState(null)
   const [err, setErr] = useState(null)
   const [tool, setTool] = useState("all")
   const [age, setAge] = useState("all")
   const [q, setQ] = useState("")
+  const [devices, setDevices] = useState([])
 
   useEffect(() => {
     getJson("/api/sessions").then(setSessions).catch(setErr)
+    getJson("/api/summary").then((s) => setDevices(s.devices ?? [])).catch(() => {})
   }, [])
 
   const filtered = useMemo(() => {
@@ -136,9 +158,7 @@ export default function SessionsPage() {
             <CopyButton command={s.resume_command} />
           </div>
         ))}
-        {sessions !== null && filtered.length === 0 && (
-          <div className="p-8 text-center text-oai-gray-400">no sessions match</div>
-        )}
+        {sessions !== null && filtered.length === 0 && <EmptyState tool={tool} sessions={sessions} devices={devices} />}
       </div>
     </div>
   )
