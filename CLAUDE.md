@@ -13,7 +13,7 @@ UsagePlane — a local-first control plane for AI coding usage, subscription lim
 - `src/server/` — 本地 HTTP API，供 `dashboard/` 使用
 - `dashboard/` — Web 面板（未开始）
 
-**Status: skeleton — 尚无可运行代码。** 设计与路线图见 `docs/ARCHITECTURE.md`。
+**Status: skeleton — 尚无可运行代码。** 架构见 `docs/ARCHITECTURE.md`，当前做到哪一步看 `docs/ROADMAP.md`（完成任务后更新状态标记）。
 
 ## Upstream provenance（载荷级约定）
 
