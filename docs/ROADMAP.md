@@ -21,13 +21,13 @@
 - ✅ `usageplane sync` 命令：解析 `~/.claude` → 写入本地库
 - ✅ 验收通过：70 个真实日志文件对拍，token 六列全局+分模型误差全为 0（含 14 亿 cached tokens），总对话数一致；验收脚本固化在 `scripts/compare-claude-tokentracker.mts` 可随时重跑
 
-### M3 第一个中转站适配器：new-api 家族 🔨
+### M3 第一个中转站适配器：new-api 家族 ✅ 2026-08-07
 
 - ✅ 适配器接口定稿：`supports: balance | usage_log | checkin | pricing` 能力声明 + 注册表（`src/relays/types.ts`）
 - ✅ new-api/one-api 通用适配器（移植自 all-api-hub `newApiFamily/default/` + `compatHeaders.ts`，AGPL 注明；注意上游目录已从其文档写的 `common/` 改名）：余额查询、user-id 兼容头扇出、quota÷500000 换算
 - ✅ 登录态方案：仅 access token（Bearer）认证（cookie 签到类推迟到 v0.2）
 - ✅ `usageplane relays` 命令：逐站查询，单站失败不中断整体
-- 🔨 验收（范围调整为 1 个站点——用户仅有一个中转站）：key 级口径已实站验证，0.333592 与网页后台完全一致；账户级已查通（余额 ¥199.2064 / 已用 ¥0.7936），待与网页后台核对后关账
+- ✅ 验收通过（范围调整为 1 个站点——用户仅有一个中转站）：key 级 0.333592 与网页完全一致；账户级余额 ¥199.2064/用量 ¥0.7936 与网页后台（¥199.21/¥0.7936）一致
 
 ### M4 最小界面
 
