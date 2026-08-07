@@ -83,6 +83,15 @@
 - ⬜ 站点自动识别（粘贴 URL 判断架构类型）
 - ⬜ 自动签到（token 化可行的站先做；纯 cookie 站评估后可能有意不做）
 
+## 补课清单（跨批次悬项，防遗忘）
+
+全部依赖 Windows 实机（Codex 与其登录态都在那边）：
+
+- ⬜ **Codex 对拍验收**（v0.2 唯一悬项）：在 Windows 上照 `scripts/compare-claude-tokentracker.mts` 模式写 codex 对拍脚本跑真实 rollout 日志，token 各列误差为 0 才关账
+- ⬜ **Codex 限额抓取**：ChatGPT 订阅的 wham 端点（`/wham/usage` + rate-limit-reset），参照 TT `usage-limits.js` codex 段；窗口按 `limit_window_seconds` 分类（18000=5h、604800=7d），不能按槽位名猜——TT 注释明示免费档只有周窗口且会占用 primary 槽
+- ⬜ **Codex 钩子**：TT 走 `~/.codex/config.toml` 的 notify 机制（`codex-config.js`），需在 Windows 验证后移植，补齐"用 Codex 也自动 sync"
+- ⬜ **Windows Claude 限额凭证排查**：Windows sync 报 0 connected providers——确认 Windows 上 Claude Code 凭证的路径/格式（可能不在 `~/.claude/.credentials.json`），修 `readClaudeAccessToken`
+
 ## v2 — 观望区（明确不承诺）
 
 - ⬜ 请求级"日志↔账单"核账：仅当站点提供逐请求日志 API 且用户显式绑定。已知硬伤记录在 ARCHITECTURE.md
