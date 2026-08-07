@@ -57,6 +57,45 @@ test("limits: parses 5h/7d windows and scoped weekly entries", () => {
   assert.deepEqual(windows.map((w) => `${w.label}:${w.utilization}`), ["5h:46", "7d:12", "Fable:20"])
 })
 
+test("limits: codex windows classified by seconds, not slot position", async () => {
+  const { parseCodexUsageBody } = await import("../src/core/limits.js")
+  // Free-tier shape: weekly window arrives in the PRIMARY slot.
+  const windows = parseCodexUsageBody(
+    {
+      rate_limit: {
+        primary_window: { used_percent: 41.6, limit_window_seconds: 604800, resets_in_seconds: 86400 },
+        secondary_window: { used_percent: 12, limit_window_seconds: 18000 },
+      },
+    },
+    1_000_000,
+  )
+  assert.deepEqual(windows.map((w) => `${w.label}:${w.utilization}`), ["7d:42", "5h:12"])
+  assert.equal(windows[0].resets_at, new Date(1_000_000 + 86400 * 1000).toISOString())
+})
+
+test("hooks: codex notify installs into config.toml, respects foreign settings", () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "usageplane-codexhook-"))
+  const toml = path.join(home, ".codex", "config.toml")
+  fs.mkdirSync(path.dirname(toml), { recursive: true })
+  fs.writeFileSync(toml, 'model = "gpt-5.4"\n')
+
+  runHooks("install", home)
+  runHooks("install", home)
+  const raw = fs.readFileSync(toml, "utf8")
+  assert.equal(raw.split("\n").filter((l) => l.startsWith("notify")).length, 1, "idempotent")
+  assert.ok(raw.includes("usageplane") && raw.includes('model = "gpt-5.4"'))
+
+  runHooks("uninstall", home)
+  const after = fs.readFileSync(toml, "utf8")
+  assert.ok(!after.includes("notify"), "our line removed")
+  assert.ok(after.includes('model = "gpt-5.4"'), "foreign content preserved")
+
+  // A foreign notify must never be overwritten.
+  fs.writeFileSync(toml, "notify = ['other-tool']\n")
+  runHooks("install", home)
+  assert.ok(fs.readFileSync(toml, "utf8").includes("other-tool"))
+})
+
 test("hooks: install is idempotent, uninstall preserves foreign hooks", () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "usageplane-hooks-"))
   const file = path.join(home, ".claude", "settings.json")

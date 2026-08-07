@@ -144,12 +144,103 @@ export async function claudeLimits(fetchFn: typeof fetch = fetch): Promise<Provi
   }
 }
 
+// --- Codex (ChatGPT subscription) --------------------------------------
+// Windows are classified by limit_window_seconds, never by slot name:
+// free-tier accounts get only a weekly window delivered in the primary
+// slot, and position-based reading would mislabel it "5h" (upstream lesson,
+// aligned with CodexBar's normalizer).
+const CODEX_SESSION_WINDOW_SECONDS = 18000
+const CODEX_WEEKLY_WINDOW_SECONDS = 604800
+
+function readCodexAuth(home = os.homedir()): { token: string; accountId: string | null } | null {
+  try {
+    const raw = JSON.parse(fs.readFileSync(path.join(home, ".codex", "auth.json"), "utf8")) as {
+      tokens?: { access_token?: string; account_id?: string }
+      access_token?: string
+    }
+    const token = raw.tokens?.access_token ?? raw.access_token
+    if (!token) return null
+    return { token, accountId: raw.tokens?.account_id ?? null }
+  } catch {
+    return null
+  }
+}
+
+export function parseCodexUsageBody(body: Record<string, unknown>, nowMs = Date.now()): LimitWindow[] {
+  const rl = (body.rate_limit ?? body) as Record<string, unknown>
+  const out: LimitWindow[] = []
+  for (const slot of ["primary_window", "secondary_window"]) {
+    const w = rl[slot] as Record<string, unknown> | undefined
+    if (!w || typeof w !== "object") continue
+    const used = Number(w.used_percent)
+    const seconds = Number(w.limit_window_seconds)
+    if (!Number.isFinite(used)) continue
+    const label =
+      seconds === CODEX_SESSION_WINDOW_SECONDS ? "5h" : seconds === CODEX_WEEKLY_WINDOW_SECONDS ? "7d" : `${slot}`
+    let resetsAt: string | null = typeof w.resets_at === "string" ? w.resets_at : null
+    const resetsIn = Number(w.resets_in_seconds)
+    if (!resetsAt && Number.isFinite(resetsIn) && resetsIn > 0) {
+      resetsAt = new Date(nowMs + resetsIn * 1000).toISOString()
+    }
+    out.push({ label, utilization: Math.round(Math.max(0, Math.min(100, used))), resets_at: resetsAt })
+  }
+  return out
+}
+
+export async function codexLimits(fetchFn: typeof fetch = fetch): Promise<ProviderLimits> {
+  const base: ProviderLimits = { id: "codex", name: "Codex", connected: false, windows: [] }
+  const auth = readCodexAuth()
+  if (!auth) return base
+
+  const cacheFile = path.join(dataDir(), "cache", "codex-limits.json")
+  const cache: CacheFile = (() => {
+    try {
+      return JSON.parse(fs.readFileSync(cacheFile, "utf8")) as CacheFile
+    } catch {
+      return {}
+    }
+  })()
+  const now = Date.now()
+  if (cache.windows && cache.fetched_at && now - cache.fetched_at < CACHE_TTL_MS) {
+    return { ...base, connected: true, windows: cache.windows }
+  }
+  if (cache.retry_until && now < cache.retry_until) {
+    return { ...base, connected: true, windows: cache.windows ?? [], error: "rate limited — backing off" }
+  }
+
+  try {
+    const headers: Record<string, string> = { Authorization: `Bearer ${auth.token}`, Accept: "application/json" }
+    // Some plan tiers reject wham without an explicit account id (upstream).
+    if (auth.accountId) headers["ChatGPT-Account-Id"] = auth.accountId
+    const res = await fetchFn("https://chatgpt.com/backend-api/wham/usage", { headers })
+    if (res.status === 401 || res.status === 403 || res.status === 404) {
+      // "No usage data for this auth state" — neutral empty, not an error.
+      return { ...base, connected: true, windows: [], error: `no usage data (HTTP ${res.status}) — run codex once to refresh auth` }
+    }
+    if (res.status === 429 || res.status === 503) {
+      const ra = Number.parseInt(res.headers.get("retry-after") ?? "", 10)
+      const retryMs = Number.isFinite(ra) && ra > 0 ? ra * 1000 : 20 * 60 * 1000
+      fs.mkdirSync(path.dirname(cacheFile), { recursive: true })
+      fs.writeFileSync(cacheFile, JSON.stringify({ ...cache, retry_until: now + retryMs }))
+      return { ...base, connected: true, windows: cache.windows ?? [], error: `HTTP ${res.status} — backing off` }
+    }
+    if (!res.ok) {
+      return { ...base, connected: true, windows: cache.windows ?? [], error: `Codex API returned ${res.status}` }
+    }
+    const windows = parseCodexUsageBody((await res.json()) as Record<string, unknown>, now)
+    fs.mkdirSync(path.dirname(cacheFile), { recursive: true })
+    fs.writeFileSync(cacheFile, JSON.stringify({ fetched_at: now, windows }))
+    return { ...base, connected: true, windows }
+  } catch (err) {
+    return { ...base, connected: true, windows: cache.windows ?? [], error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
 /** All providers for the Limits page; unimplemented ones show "Not connected". */
 export async function allLimits(fetchFn: typeof fetch = fetch): Promise<ProviderLimits[]> {
   const placeholders: ProviderLimits[] = [
-    { id: "codex", name: "Codex", connected: false, windows: [] },
     { id: "cursor", name: "Cursor", connected: false, windows: [] },
     { id: "gemini", name: "Gemini", connected: false, windows: [] },
   ]
-  return [await claudeLimits(fetchFn), ...placeholders]
+  return [await claudeLimits(fetchFn), await codexLimits(fetchFn), ...placeholders]
 }

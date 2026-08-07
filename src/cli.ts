@@ -1,3 +1,4 @@
+import { runDoctor } from "./commands/doctor.js"
 import { runHooks } from "./commands/hooks.js"
 import { runInit } from "./commands/init.js"
 import { runPull } from "./commands/pull.js"
@@ -14,7 +15,8 @@ Usage: usageplane <command>
 Commands:
   init      Create ~/.usageplane with a starter config and database
   sync      Parse client logs into the local database (auto-pushes when a hub is set)
-  hooks     install | uninstall | status — event-driven sync via Claude Code Stop hook
+  hooks     install | uninstall | status — event-driven sync (Claude Stop hook + Codex notify)
+  doctor    Diagnose data sources, credentials presence, and config on this machine
   push      Send local records to the aggregation hub (see hub in usageplane.yaml)
   pull      Fetch the hub's records so this device shows the merged view
   relays    Query configured relay sites' balances
@@ -37,6 +39,9 @@ switch (command) {
     break
   case "hooks":
     runHooks(process.argv[3])
+    break
+  case "doctor":
+    runDoctor()
     break
   case "push":
     await runPush(process.argv[3])
