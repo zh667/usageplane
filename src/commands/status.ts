@@ -33,6 +33,12 @@ export async function runStatus(): Promise<void> {
         `  ${t.tool}: ${fmt(t.total_tokens)} tokens (in ${fmt(t.input_tokens)} / out ${fmt(t.output_tokens)}), ${t.conversation_count} conversations`,
       )
     }
+    const devices = store.totalsByDevice()
+    if (devices.length > 1) {
+      for (const d of devices) {
+        console.log(`    ${d.device_id} ${d.tool}: ${fmt(d.total_tokens)} tokens`)
+      }
+    }
     const days = store.totalsByDay(3)
     for (const d of days) {
       console.log(`    ${d.day} ${d.tool}: ${fmt(d.total_tokens)} tokens`)

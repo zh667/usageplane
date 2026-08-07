@@ -57,6 +57,7 @@ export const DASHBOARD_HTML = `<!doctype html>
   <section>
     <h2>AI 编程用量（本地统计）</h2>
     <div class="tiles" id="usage-tiles"></div>
+    <table id="devices"></table>
     <table id="models"></table>
     <div class="sub" id="projects"></div>
   </section>
@@ -85,6 +86,13 @@ async function load() {
   document.getElementById("usage-tiles").innerHTML =
     tile(fmt(totals.tokens), "total tokens") + tile(String(totals.conv), "conversations") +
     summary.tools.map(t => tile(fmt(t.total_tokens), esc(t.tool))).join("")
+
+  if (summary.devices.length > 1) {
+    document.getElementById("devices").innerHTML =
+      "<tr><th>device</th><th>tool</th><th class=n>total</th><th class=n>conv</th></tr>" +
+      summary.devices.map(d => "<tr><td>" + esc(d.device_id) + "</td><td>" + esc(d.tool) +
+        "</td><td class=n>" + fmt(d.total_tokens) + "</td><td class=n>" + d.conversation_count + "</td></tr>").join("")
+  }
 
   const models = summary.models.filter(m => m.model !== "unknown").slice(0, 8)
   document.getElementById("models").innerHTML =

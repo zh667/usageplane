@@ -1,4 +1,5 @@
 import { runInit } from "./commands/init.js"
+import { runPush } from "./commands/push.js"
 import { runRelays } from "./commands/relays.js"
 import { runStatus } from "./commands/status.js"
 import { runSync } from "./commands/sync.js"
@@ -11,6 +12,7 @@ Usage: usageplane <command>
 Commands:
   init      Create ~/.usageplane with a starter config and database
   sync      Parse client logs into the local database
+  push      Send local records to the aggregation hub (see hub in usageplane.yaml)
   relays    Query configured relay sites' balances
   status    Print usage and relay-asset summary
   serve     Local dashboard server (default http://127.0.0.1:7690)
@@ -28,6 +30,9 @@ switch (command) {
     break
   case "sync":
     await runSync()
+    break
+  case "push":
+    await runPush(process.argv[3])
     break
   case "relays":
     await runRelays()

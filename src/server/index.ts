@@ -3,11 +3,14 @@
 // structure, no code copied.
 
 import http from "node:http"
-import { loadConfig } from "../core/config.js"
+import { loadConfig, resolveHubToken } from "../core/config.js"
 import { dataDir, dbPath } from "../core/paths.js"
 import { Store } from "../core/store.js"
+import type { UsageRecord } from "../core/types.js"
 import { getAdapter } from "../relays/index.js"
 import { DASHBOARD_HTML } from "./dashboard-html.js"
+
+const MAX_INGEST_BYTES = 32 * 1024 * 1024
 
 const RELAY_CACHE_MS = 60_000
 
@@ -62,11 +65,38 @@ export function createServer(dir = dataDir()): http.Server {
             device: cfg.device,
             generated_at: new Date().toISOString(),
             record_count: store.countRecords(),
+            devices: store.totalsByDevice(),
             tools: store.totalsByTool(),
             models: store.totalsByModel(),
             projects: store.totalsByProject(),
             days: store.totalsByDay(14),
           })
+        } finally {
+          store.close()
+        }
+        return
+      }
+      if (url.pathname === "/api/ingest" && req.method === "POST") {
+        const expected = resolveHubToken(loadConfig(dir).hub)
+        if (!expected) {
+          json(res, 403, { error: "ingest disabled — set hub.token (or token_env) in usageplane.yaml" })
+          return
+        }
+        const auth = req.headers.authorization ?? ""
+        if (auth !== `Bearer ${expected}`) {
+          json(res, 401, { error: "bad token" })
+          return
+        }
+        const body = await readBody(req, MAX_INGEST_BYTES)
+        const payload = JSON.parse(body) as { records?: UsageRecord[] }
+        if (!Array.isArray(payload.records)) {
+          json(res, 400, { error: "body must be {records: UsageRecord[]}" })
+          return
+        }
+        const store = new Store(dbPath(dir))
+        try {
+          const upserted = store.upsertUsage(payload.records)
+          json(res, 200, { upserted, total: store.countRecords() })
         } finally {
           store.close()
         }
@@ -80,6 +110,24 @@ export function createServer(dir = dataDir()): http.Server {
     } catch (err) {
       json(res, 500, { error: err instanceof Error ? err.message : String(err) })
     }
+  })
+}
+
+function readBody(req: http.IncomingMessage, limit: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let size = 0
+    const chunks: Buffer[] = []
+    req.on("data", (c: Buffer) => {
+      size += c.length
+      if (size > limit) {
+        reject(new Error(`body exceeds ${limit} bytes`))
+        req.destroy()
+        return
+      }
+      chunks.push(c)
+    })
+    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")))
+    req.on("error", reject)
   })
 }
 

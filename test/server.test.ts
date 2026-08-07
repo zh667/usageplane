@@ -70,6 +70,41 @@ test("/api/relays returns [] with no relays configured; / serves the dashboard; 
   })
 })
 
+test("/api/ingest: 403 without hub token config, 401 with bad token, upserts with good token", async () => {
+  const dir = seededDir()
+  await withServer(dir, async (base) => {
+    const rec = {
+      device_id: "windows-pc", tool: "codex", project: "p", source_kind: "unknown",
+      model: "gpt-5.4", hour_start: "2026-08-07T11:00:00.000Z",
+      input_tokens: 5, output_tokens: 5, cached_input_tokens: 0,
+      cache_creation_input_tokens: 0, reasoning_output_tokens: 0,
+      total_tokens: 10, conversation_count: 1,
+    }
+    const post = (token?: string) =>
+      fetch(`${base}/api/ingest`, {
+        method: "POST",
+        headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ records: [rec] }),
+      })
+
+    assert.equal((await post("any")).status, 403, "no hub token configured → ingest disabled")
+
+    fs.writeFileSync(path.join(dir, "usageplane.yaml"), "hub:\n  token: s3cret\n")
+    assert.equal((await post("wrong")).status, 401)
+    assert.equal((await post()).status, 401)
+
+    const ok = await post("s3cret")
+    assert.equal(ok.status, 200)
+    const body = await ok.json()
+    assert.equal(body.upserted, 1)
+    assert.equal(body.total, 3)
+
+    const summary = await fetch(`${base}/api/summary`).then((r) => r.json())
+    const win = summary.devices.find((d: { device_id: string }) => d.device_id === "windows-pc")
+    assert.equal(win?.total_tokens, 10)
+  })
+})
+
 test("store aggregation queries group correctly", () => {
   const dir = seededDir()
   const store = new Store(path.join(dir, "usageplane.db"))

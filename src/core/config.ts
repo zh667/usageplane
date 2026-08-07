@@ -24,16 +24,41 @@ export interface RelayConfig {
   currency?: string
 }
 
+/**
+ * Multi-device aggregation. On the hub (the always-on device running `serve`)
+ * set only the token — it authenticates POST /api/ingest. On satellite
+ * devices set url + the same token; `usageplane push` sends the local
+ * records there. Upserts are idempotent, so repeated pushes are safe.
+ */
+export interface HubConfig {
+  url?: string
+  token?: string
+  /** Name of an env var holding the token. Wins over `token`. */
+  token_env?: string
+}
+
 export interface UsagePlaneConfig {
   /** Stable device name; defaults to os.hostname(). */
   device: string
   /** Enabled collector ids, e.g. ["claude-code"]. */
   collectors: string[]
   relays: RelayConfig[]
+  hub?: HubConfig
 }
 
 export function defaultConfig(): UsagePlaneConfig {
   return { device: os.hostname(), collectors: [], relays: [] }
+}
+
+/** Resolve the hub shared token: token_env (if set) wins over inline token. */
+export function resolveHubToken(hub: HubConfig | undefined): string | undefined {
+  if (!hub) return undefined
+  if (hub.token_env) {
+    const v = process.env[hub.token_env]
+    if (!v) throw new Error(`hub: env var ${hub.token_env} is not set`)
+    return v
+  }
+  return hub.token
 }
 
 /**
@@ -68,6 +93,12 @@ export function loadConfig(dir = dataDir()): UsagePlaneConfig {
     if (!Array.isArray(cfg.relays)) throw new Error(`${file}: "relays" must be a list`)
     out.relays = cfg.relays.map((r, i) => validateRelay(r, `${file}: relays[${i}]`))
   }
+  if (cfg.hub !== undefined) {
+    if (typeof cfg.hub !== "object" || cfg.hub === null || Array.isArray(cfg.hub)) {
+      throw new Error(`${file}: "hub" must be a mapping`)
+    }
+    out.hub = cfg.hub as HubConfig
+  }
   return out
 }
 
@@ -97,7 +128,7 @@ export function starterConfigYaml(device: string): string {
   return `# UsagePlane configuration — see docs/ARCHITECTURE.md
 device: ${device}
 
-# Enabled collectors. Available: claude-code (codex planned)
+# Enabled collectors. Available: claude-code, codex
 collectors:
   - claude-code
 

@@ -1,4 +1,5 @@
 import { collectClaudeCode } from "../collectors/claude-code.js"
+import { collectCodex } from "../collectors/codex.js"
 import { loadConfig } from "../core/config.js"
 import { dataDir, dbPath } from "../core/paths.js"
 import { Store } from "../core/store.js"
@@ -16,8 +17,13 @@ export async function runSync(): Promise<void> {
         const n = store.upsertUsage(records)
         console.log(`claude-code: ${n} hourly buckets synced`)
         total += n
+      } else if (collector === "codex") {
+        const records = await collectCodex({ deviceId: cfg.device })
+        const n = store.upsertUsage(records)
+        console.log(`codex: ${n} hourly buckets synced`)
+        total += n
       } else {
-        console.warn(`skipping unknown collector "${collector}" (available: claude-code)`)
+        console.warn(`skipping unknown collector "${collector}" (available: claude-code, codex)`)
       }
     }
     console.log(`done — ${total} buckets, database now holds ${store.countRecords()} records`)

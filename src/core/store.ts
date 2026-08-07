@@ -53,6 +53,10 @@ export interface DayTotals extends ToolTotals {
   day: string
 }
 
+export interface DeviceTotals extends ToolTotals {
+  device_id: string
+}
+
 export class Store {
   private db: Database.Database
 
@@ -176,6 +180,25 @@ export class Store {
         GROUP BY tool, day ORDER BY day DESC LIMIT ?
       `)
       .all(days) as DayTotals[]
+  }
+
+  /** Per-device totals — the cross-device home view. */
+  totalsByDevice(): DeviceTotals[] {
+    return this.db
+      .prepare(`
+        SELECT device_id, tool,
+               SUM(input_tokens) AS input_tokens,
+               SUM(output_tokens) AS output_tokens,
+               SUM(total_tokens) AS total_tokens,
+               SUM(conversation_count) AS conversation_count
+        FROM usage_records GROUP BY device_id, tool ORDER BY total_tokens DESC
+      `)
+      .all() as DeviceTotals[]
+  }
+
+  /** Every record, for pushing to an aggregation hub. */
+  allRecords(): UsageRecord[] {
+    return this.db.prepare("SELECT * FROM usage_records").all() as UsageRecord[]
   }
 
   countRecords(): number {

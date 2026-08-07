@@ -28,6 +28,27 @@ dashboard/          Web 面板（未开始）
 docs/               架构与领域知识
 ```
 
+## Multi-device quickstart
+
+Hub（常开设备，如 VPS）的 `~/.usageplane/usageplane.yaml`：
+
+```yaml
+hub:
+  token: <共享密钥>
+```
+
+卫星设备（如 Windows）：
+
+```yaml
+collectors:
+  - codex          # 或 claude-code
+hub:
+  url: http://127.0.0.1:7690   # 经 SSH 隧道: ssh -L 7690:127.0.0.1:7690 user@hub
+  token: <同一个共享密钥>
+```
+
+然后在卫星设备上 `usageplane sync && usageplane push`——hub 的 dashboard 即出现按设备分组的合并视图。重复 push 安全（幂等 upsert）。
+
 ## Acknowledgements
 
 Built on the shoulders of:
