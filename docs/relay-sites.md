@@ -21,6 +21,8 @@
 
 ## 适配器设计推论
 
+- 这类站点有**两种凭证**，能查的东西不同（2026-08-07 实站验证）：控制台"个人设置"生成的 **access token** 走 `/api/user/self`，看到账户级余额；**sk- API key** 只能走 OpenAI 兼容的 `/dashboard/billing/subscription|usage`，看到这把 key 自己的限额与消费（`hard_limit_usd=100000000` 是"不限额"哨兵值；`total_usage` 单位是 0.01 美元）。适配器按 token 前缀自动分流。
+
 - 通用适配层只覆盖 One-API/New-API 兼容桶；AxonHub、Claude Code Hub、Sub2API、新版 VoAPI 各自需要独立适配器。
 - 不是所有站点都提供逐请求日志——很多只有余额/总消费。适配器能力要声明式（`supports: balance | usage_log | checkin | pricing`），上层按能力降级展示。
 - 当实现依赖上游文档或实测行为时，在适配器代码旁加简短注释记录来源 URL 和所依赖的具体契约。

@@ -12,6 +12,12 @@ import type { RelayAdapter, RelayBalance } from "../types.js"
 /** Upstream default: 500000 quota units = 1 USD. Per-site overrides are rare; revisit if a site drifts. */
 export const QUOTA_PER_UNIT = 500_000
 
+/**
+ * one-api/new-api report hard_limit_usd=100000000 for "unlimited" keys.
+ * Treat anything at or above it as unlimited rather than a real balance.
+ */
+export const UNLIMITED_HARD_LIMIT_USD = 100_000_000
+
 // Different One-API/New-API downstream forks read different user-id header
 // names; fan the same id out across all known keys (upstream compatHeaders.ts).
 const COMPAT_USER_ID_HEADERS = [
@@ -62,6 +68,12 @@ export const newApiFamilyAdapter: RelayAdapter = {
   supports: ["balance"],
 
   async fetchBalance(relay, fetchFn = fetch): Promise<RelayBalance> {
+    // Two credential kinds exist on these sites (verified live 2026-08-07):
+    //  - access token (console → profile) → /api/user/self, account-wide quota
+    //  - sk- API key → OpenAI-compat billing endpoints, that key's own numbers
+    const token = resolveRelayToken(relay)
+    if (token?.startsWith("sk-")) return fetchKeyBalance(relay, fetchFn)
+
     const data = await apiGet<{ quota?: number; used_quota?: number }>(
       relay,
       "/api/user/self",
@@ -70,10 +82,46 @@ export const newApiFamilyAdapter: RelayAdapter = {
     const quota = Number.isFinite(data.quota) ? (data.quota as number) : 0
     const usedQuota = Number.isFinite(data.used_quota) ? (data.used_quota as number) : undefined
     return {
+      scope: "account",
       quota,
       used_quota: usedQuota,
       balance_usd: quota / QUOTA_PER_UNIT,
       used_usd: usedQuota === undefined ? undefined : usedQuota / QUOTA_PER_UNIT,
     }
   },
+}
+
+/**
+ * Key-scoped balance via the OpenAI-compatible billing surface that
+ * one-api/new-api implement for sk- keys (no envelope — raw JSON):
+ *   GET /dashboard/billing/subscription → hard_limit_usd
+ *   GET /dashboard/billing/usage        → total_usage in 0.01 USD units
+ */
+async function fetchKeyBalance(relay: RelayConfig, fetchFn: typeof fetch): Promise<RelayBalance> {
+  const sub = await rawGet<{ hard_limit_usd?: number }>(relay, "/dashboard/billing/subscription", fetchFn)
+  const end = new Date(Date.now() + 24 * 3600 * 1000).toISOString().slice(0, 10)
+  const usage = await rawGet<{ total_usage?: number }>(
+    relay,
+    `/dashboard/billing/usage?start_date=2020-01-01&end_date=${end}`,
+    fetchFn,
+  )
+  const hardLimit = Number.isFinite(sub.hard_limit_usd) ? (sub.hard_limit_usd as number) : 0
+  const usedUsd = Number.isFinite(usage.total_usage) ? (usage.total_usage as number) / 100 : undefined
+  const unlimited = hardLimit >= UNLIMITED_HARD_LIMIT_USD
+  return {
+    scope: "key",
+    used_usd: usedUsd,
+    unlimited,
+    balance_usd: unlimited ? undefined : hardLimit - (usedUsd ?? 0),
+  }
+}
+
+/** GET returning a raw JSON body (billing endpoints have no {success,data} envelope). */
+async function rawGet<T>(relay: RelayConfig, endpoint: string, fetchFn: typeof fetch): Promise<T> {
+  const url = `${relay.base_url.replace(/\/+$/, "")}${endpoint}`
+  const res = await fetchFn(url, { headers: buildHeaders(relay) })
+  if (!res.ok) {
+    throw new Error(`relay "${relay.id}": HTTP ${res.status} on ${endpoint}`)
+  }
+  return (await res.json()) as T
 }

@@ -8,13 +8,20 @@ import type { RelayConfig } from "../core/config.js"
 export type RelayCapability = "balance" | "usage_log" | "checkin" | "pricing"
 
 export interface RelayBalance {
-  /** Remaining quota in the site's native quota units. */
-  quota: number
+  /** What the credential could see: whole account, or just its own key. */
+  scope: "account" | "key"
+  /** Remaining quota in the site's native quota units (account scope only). */
+  quota?: number
   /** Total consumed quota units, when the site reports it. */
   used_quota?: number
-  /** Remaining balance in USD (quota / quota_per_unit). */
-  balance_usd: number
+  /**
+   * Remaining balance in USD. Undefined when unlimited — an unlimited key
+   * has spend history but no meaningful remaining balance.
+   */
+  balance_usd?: number
   used_usd?: number
+  /** True when the site reports the sentinel "unlimited" quota for this key. */
+  unlimited?: boolean
 }
 
 export interface RelayAdapter {

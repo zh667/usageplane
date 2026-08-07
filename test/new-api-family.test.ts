@@ -68,6 +68,37 @@ test("HTTP error and missing data field throw with relay id and endpoint", async
   await assert.rejects(() => newApiFamilyAdapter.fetchBalance(relay(), fn2), /no data field/)
 })
 
+function fakeFetchByPath(routes: Record<string, unknown>): typeof fetch {
+  return (async (url: unknown) => {
+    const path = new URL(String(url)).pathname
+    const body = routes[path]
+    return { ok: body !== undefined, status: body === undefined ? 404 : 200, json: async () => body }
+  }) as unknown as typeof fetch
+}
+
+test("sk- tokens use key-scoped billing endpoints instead of /api/user/self", async () => {
+  const fn = fakeFetchByPath({
+    "/dashboard/billing/subscription": { hard_limit_usd: 5 },
+    "/dashboard/billing/usage": { total_usage: 100 },
+  })
+  const b = await newApiFamilyAdapter.fetchBalance(relay({ token: "sk-abc" }), fn)
+  assert.equal(b.scope, "key")
+  assert.equal(b.used_usd, 1)
+  assert.equal(b.balance_usd, 4)
+  assert.equal(b.unlimited, false)
+})
+
+test("sk- token with sentinel hard limit reports unlimited, no balance", async () => {
+  const fn = fakeFetchByPath({
+    "/dashboard/billing/subscription": { hard_limit_usd: 100_000_000 },
+    "/dashboard/billing/usage": { total_usage: 33.3592 },
+  })
+  const b = await newApiFamilyAdapter.fetchBalance(relay({ token: "sk-abc" }), fn)
+  assert.equal(b.unlimited, true)
+  assert.equal(b.balance_usd, undefined)
+  assert.equal(b.used_usd, 0.333592)
+})
+
 test("registry: new-api and one-api resolve, unknown types do not", () => {
   assert.equal(getAdapter("new-api"), newApiFamilyAdapter)
   assert.equal(getAdapter("one-api"), newApiFamilyAdapter)
