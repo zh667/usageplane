@@ -1,0 +1,32 @@
+{
+  "name": "usageplane",
+  "version": "0.0.1",
+  "description": "A local-first control plane for AI coding usage, subscription limits, and relay account assets.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "usageplane": "./bin/usageplane.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test test/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zh667/usageplane.git"
+  },
+  "keywords": [
+    "ai",
+    "token",
+    "usage",
+    "claude-code",
+    "codex",
+    "new-api",
+    "one-api",
+    "relay",
+    "dashboard"
+  ]
+}
