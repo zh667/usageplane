@@ -29,12 +29,12 @@
 - ✅ `usageplane relays` 命令：逐站查询，单站失败不中断整体
 - ✅ 验收通过（范围调整为 1 个站点——用户仅有一个中转站）：key 级 0.333592 与网页完全一致；账户级余额 ¥199.2064/用量 ¥0.7936 与网页后台（¥199.21/¥0.7936）一致
 
-### M4 最小界面
+### M4 最小界面 ✅ 2026-08-07
 
-- ⬜ `usageplane serve`：本地 HTTP API（参考 TokenTracker `local-api.js` 的路由风格）
-- ⬜ 最小 dashboard：两栏首页（用量 | 资产），estimated 与 reported 分开展示
-- ⬜ `usageplane status`:CLI 里直接打印两栏摘要（没有浏览器的 VPS 场景）
-- 验收：README 的"What it will do"第一、二条在本机成立
+- ✅ `usageplane serve`：node:http 本地 API（`/api/summary`、`/api/relays`，余额 60s 缓存），127.0.0.1:7690
+- ✅ 最小 dashboard：两栏首页（用量 stat tile+模型/项目表 | 中转站余额卡片），页脚明示两栏口径永不相加；深浅色自适应
+- ✅ `usageplane status`：CLI 两栏摘要（无浏览器的 VPS 场景），本地统计与站点实报分区展示
+- ✅ 验收：README"What it will do"前两条在本机成立——1.41B tokens/529 会话真实统计 + 中转站余额实报（curl 三路由 + status 实跑验证；浏览器视觉复核待装 libnspr4 后补截图）
 
 ## v0.2 — 多设备与更多来源
 

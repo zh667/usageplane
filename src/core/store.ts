@@ -40,6 +40,19 @@ export interface ToolTotals {
   conversation_count: number
 }
 
+export interface ModelTotals extends ToolTotals {
+  model: string
+}
+
+export interface ProjectTotals extends ToolTotals {
+  project: string
+}
+
+export interface DayTotals extends ToolTotals {
+  /** UTC date, YYYY-MM-DD. */
+  day: string
+}
+
 export class Store {
   private db: Database.Database
 
@@ -121,6 +134,48 @@ export class Store {
         FROM usage_records GROUP BY tool ORDER BY total_tokens DESC
       `)
       .all() as ToolTotals[]
+  }
+
+  /** Per-model totals. Conversations sit under model "unknown" by design (see collector docs). */
+  totalsByModel(): ModelTotals[] {
+    return this.db
+      .prepare(`
+        SELECT tool, model,
+               SUM(input_tokens) AS input_tokens,
+               SUM(output_tokens) AS output_tokens,
+               SUM(total_tokens) AS total_tokens,
+               SUM(conversation_count) AS conversation_count
+        FROM usage_records GROUP BY tool, model ORDER BY total_tokens DESC
+      `)
+      .all() as ModelTotals[]
+  }
+
+  totalsByProject(): ProjectTotals[] {
+    return this.db
+      .prepare(`
+        SELECT tool, project,
+               SUM(input_tokens) AS input_tokens,
+               SUM(output_tokens) AS output_tokens,
+               SUM(total_tokens) AS total_tokens,
+               SUM(conversation_count) AS conversation_count
+        FROM usage_records GROUP BY tool, project ORDER BY total_tokens DESC
+      `)
+      .all() as ProjectTotals[]
+  }
+
+  /** Daily totals for the most recent `days` UTC days that have data. */
+  totalsByDay(days = 14): DayTotals[] {
+    return this.db
+      .prepare(`
+        SELECT tool, substr(hour_start, 1, 10) AS day,
+               SUM(input_tokens) AS input_tokens,
+               SUM(output_tokens) AS output_tokens,
+               SUM(total_tokens) AS total_tokens,
+               SUM(conversation_count) AS conversation_count
+        FROM usage_records
+        GROUP BY tool, day ORDER BY day DESC LIMIT ?
+      `)
+      .all(days) as DayTotals[]
   }
 
   countRecords(): number {
