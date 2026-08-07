@@ -7,11 +7,12 @@
 
 目标：在本机跑 `usageplane serve`，浏览器里同时看到"AI 编程用量"和"中转站资产"两栏真实数据。
 
-### M1 核心数据层（其他一切的地基）
+### M1 核心数据层（其他一切的地基）✅ 2026-08-07
 
-- ⬜ 统一记录 schema 定稿并落成 TS 类型（`src/core/types.ts`，字段见 ARCHITECTURE.md）
-- ⬜ 本地存储：`~/.usageplane/` 目录结构 + SQLite（参考 TokenTracker 的 queue.jsonl→读取模式，但直接上 SQLite 省一次迁移）
-- ⬜ `usageplane.yaml` 配置加载（设备名、启用的采集器、中转站列表）
+- ✅ 统一记录 schema 定稿并落成 TS 类型（`src/core/types.ts`，字段见 ARCHITECTURE.md）
+- ✅ 本地存储：`~/.usageplane/` + SQLite（better-sqlite3，WAL，追加式 migration，upsert 按桶键 last-write-wins）
+- ✅ `usageplane.yaml` 配置加载（设备名、采集器、中转站列表；token_env 优先于明文 token）
+- ✅ 附带：`usageplane init` 命令（建目录 + 起始配置 + 建库），CLI 帮助骨架
 
 ### M2 第一个采集器：Claude Code
 
@@ -55,3 +56,4 @@
 |---|---|
 | 2026-08-07 | 定名 UsagePlane；许可证 AGPL-3.0-only（all-api-hub 传染）；不做请求代理；核账降为可选 |
 | 2026-08-07 | 首个采集器选 Claude Code，首个适配器选 new-api 家族（覆盖面最大） |
+| 2026-08-07 | SQLite 选 better-sqlite3：Node 22 内置 node:sqlite 仍是实验性；secrets 推荐 token_env 而非明文写进 yaml |

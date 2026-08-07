@@ -32,8 +32,13 @@
     "dashboard"
   ],
   "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.1.2",
     "tsx": "^4.23.10",
     "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "yaml": "^2.9.0"
   }
 }
