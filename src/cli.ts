@@ -1,4 +1,5 @@
 import { runInit } from "./commands/init.js"
+import { runSync } from "./commands/sync.js"
 
 const HELP = `usageplane — one control plane for all your AI usage
 
@@ -6,7 +7,7 @@ Usage: usageplane <command>
 
 Commands:
   init      Create ~/.usageplane with a starter config and database
-  sync      (planned, M2) Parse client logs into the local database
+  sync      Parse client logs into the local database
   status    (planned, M4) Print usage and relay-asset summary
   serve     (planned, M4) Local dashboard server
 
@@ -19,6 +20,9 @@ const command = process.argv[2]
 switch (command) {
   case "init":
     runInit()
+    break
+  case "sync":
+    await runSync()
     break
   case undefined:
   case "help":

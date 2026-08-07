@@ -9,7 +9,8 @@ export type SourceKind = "official_subscription" | "direct_api" | "relay" | "unk
 export type ToolId = "claude-code" | "codex" | (string & {})
 
 /**
- * One hourly usage bucket for (device, tool, project, model).
+ * One half-hour usage bucket for (device, tool, project, model) —
+ * bucket granularity follows TokenTracker so results stay comparable.
  * Aggregated — never contains prompts, messages, or conversation bodies.
  */
 export interface UsageRecord {
@@ -25,7 +26,7 @@ export interface UsageRecord {
   /** Irreversible fingerprint of the credential — never the key itself. */
   credential_id?: string | null
   model: string
-  /** UTC ISO timestamp of the hour bucket start, e.g. "2026-08-07T09:00:00Z". */
+  /** UTC ISO timestamp of the half-hour bucket start, e.g. "2026-08-07T09:30:00.000Z". */
   hour_start: string
 
   /** Non-cached input only (no cache reads/writes). */

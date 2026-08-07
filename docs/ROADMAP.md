@@ -14,12 +14,12 @@
 - ✅ `usageplane.yaml` 配置加载（设备名、采集器、中转站列表；token_env 优先于明文 token）
 - ✅ 附带：`usageplane init` 命令（建目录 + 起始配置 + 建库），CLI 帮助骨架
 
-### M2 第一个采集器：Claude Code
+### M2 第一个采集器：Claude Code ✅ 2026-08-07
 
-- ⬜ 移植 TokenTracker 的 Claude JSONL 解析器（`src/lib/rollout.js` 中 claude 部分 + `claudeMessageDedupKey` 去重，MIT 注明）
-- ⬜ CommonJS → ESM/TS 改写
-- ⬜ `usageplane sync` 命令：解析 `~/.claude` → 写入本地库
-- 验收：与 TokenTracker 对同一份日志的统计结果一致（token 各分列误差为 0）
+- ✅ 移植 TokenTracker 的 Claude JSONL 解析器（去重、归一化、半小时桶、cwd→项目归属，MIT 注明）
+- ✅ CommonJS → ESM/TS 改写（有意简化：全量重解析替代 cursor 增量——upsert 幂等所以正确；简化处均在文件头注明）
+- ✅ `usageplane sync` 命令：解析 `~/.claude` → 写入本地库
+- ✅ 验收通过：70 个真实日志文件对拍，token 六列全局+分模型误差全为 0（含 14 亿 cached tokens），总对话数一致；验收脚本固化在 `scripts/compare-claude-tokentracker.mts` 可随时重跑
 
 ### M3 第一个中转站适配器：new-api 家族
 
@@ -57,3 +57,4 @@
 | 2026-08-07 | 定名 UsagePlane；许可证 AGPL-3.0-only（all-api-hub 传染）；不做请求代理；核账降为可选 |
 | 2026-08-07 | 首个采集器选 Claude Code，首个适配器选 new-api 家族（覆盖面最大） |
 | 2026-08-07 | SQLite 选 better-sqlite3：Node 22 内置 node:sqlite 仍是实验性；secrets 推荐 token_env 而非明文写进 yaml |
+| 2026-08-07 | 与 TokenTracker 的有意分歧：对话数不折算进"主力模型"（用户消息无模型字段，上游做法是猜测），保持挂 model=unknown——遵循"归属绝不猜测"原则 |
