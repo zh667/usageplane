@@ -27,7 +27,7 @@
 - ✅ new-api/one-api 通用适配器（移植自 all-api-hub `newApiFamily/default/` + `compatHeaders.ts`，AGPL 注明；注意上游目录已从其文档写的 `common/` 改名）：余额查询、user-id 兼容头扇出、quota÷500000 换算
 - ✅ 登录态方案：仅 access token（Bearer）认证（cookie 签到类推迟到 v0.2）
 - ✅ `usageplane relays` 命令：逐站查询，单站失败不中断整体
-- ⬜ 验收：对实际在用的 2 个中转站能查到余额，数字与网页后台一致（待用户提供站点配置）
+- 🔨 验收：key 级口径已实站验证——查询值 0.333592 与网页后台完全一致（2026-08-07，1 个站点）；账户级余额待 access token，第二个站点待提供
 
 ### M4 最小界面
 
@@ -60,3 +60,4 @@
 | 2026-08-07 | SQLite 选 better-sqlite3：Node 22 内置 node:sqlite 仍是实验性；secrets 推荐 token_env 而非明文写进 yaml |
 | 2026-08-07 | 与 TokenTracker 的有意分歧：对话数不折算进"主力模型"（用户消息无模型字段，上游做法是猜测），保持挂 model=unknown——遵循"归属绝不猜测"原则 |
 | 2026-08-07 | 中转站两种凭证分流：sk- key → key 级 billing 端点；access token → 账户级 /api/user/self。RelayBalance 增加 scope 字段区分口径 |
+| 2026-08-07 | 货币符号是站点自选的显示配置（同一数值有站标 $ 有站标 ¥），底层单位恒为 quota/500000。relay.currency 只管显示，永不参与换算 |

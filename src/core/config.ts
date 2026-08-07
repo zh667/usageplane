@@ -16,6 +16,12 @@ export interface RelayConfig {
   token_env?: string
   /** Site user id — sent as New-API-User/… compat headers; some forks require it. */
   user_id?: number | string
+  /**
+   * Display currency symbol, default "$". Sites choose their own display
+   * currency (¥ is common) while the underlying unit stays quota/500000 —
+   * this affects display only, never conversion.
+   */
+  currency?: string
 }
 
 export interface UsagePlaneConfig {

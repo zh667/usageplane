@@ -20,12 +20,13 @@ export async function runRelays(): Promise<void> {
     }
     try {
       const b = await adapter.fetchBalance(relay)
-      const used = b.used_usd === undefined ? "" : `, used $${b.used_usd.toFixed(4)}`
+      const cur = relay.currency ?? "$"
+      const used = b.used_usd === undefined ? "" : `, used ${cur}${b.used_usd.toFixed(4)}`
       const balance = b.unlimited
         ? "unlimited"
         : b.balance_usd === undefined
           ? "n/a"
-          : `$${b.balance_usd.toFixed(4)}`
+          : `${cur}${b.balance_usd.toFixed(4)}`
       const scope = b.scope === "key" ? " [key scope — use an access token for account balance]" : ""
       console.log(`${relay.id} (${relay.type}): balance ${balance}${used}${scope}`)
     } catch (err) {
