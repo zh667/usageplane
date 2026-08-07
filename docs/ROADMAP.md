@@ -43,7 +43,9 @@
 - ✅ 多设备聚合（2026-08-07）：hub 模式——常开设备（VPS）`serve` 暴露 `POST /api/ingest`（Bearer 共享 token，无 token 配置则 403 拒收），卫星设备 `usageplane push`；幂等 upsert 免合并冲突。回环 E2E 验证双推不翻倍；dashboard/status 增加按设备分组视图
 - ⬜ Codex 对拍验收：Windows 装好后 push 真实日志上来核对（v0.2 唯一悬项）
 
-## v0.3 — 云端三档（聚合首选，零门槛：默认假设用户没有 VPS）
+> **批次顺序（用户定，2026-08-07）：v0.4 用量侧对齐先做，云端三档（v0.3）后推。** 编号保留不改，按此顺序执行。
+
+## v0.3 — 云端三档（后推；聚合首选，零门槛:默认假设用户没有 VPS）
 
 三档通道，同一套协议：
 
@@ -54,15 +56,18 @@
 2. **自托管 hub（数据主权档）**：⬜ `usageplane hub init` 一条命令在自己 VPS 起同款 hub（systemd+HTTPS 全自动），数据不出门
 3. **SSH 隧道（备用档）**：✅ 已可用；云端不可用时降级、临时拉取某台远程机器用量
 
-## v0.4 — 用量侧对齐批次（向 TokenTracker 靠）
+## v0.4 — 用量侧对齐批次（当前批次，向 TokenTracker 靠）
 
-细节见 FEATURE-MAP.md 用量侧表：
+**逐页详细规格：[v0.4-usage-side.md](v0.4-usage-side.md)**（含实景截图核对的要素清单、后端端点、移植来源、验收标准）。概要：
 
-- ⬜ 成本估算（estimated cost）：移植定价表，含缓存价差；与中转站 reported 永不相加
-- ⬜ 官方订阅额度窗口（Claude Max/Pro 的 5h/周窗口）
-- ⬜ dashboard 对齐：活动热力图、按日趋势图
-- ⬜ 项目归属升级：cwd basename → git 仓库根识别
-- ⬜ 更多采集器（Cursor/Gemini 优先，按 port-collector skill 流程）
+- ⬜ 前端栈迁移：React+Vite+Tailwind（与上游同栈），移植 oai 设计基建（字体/色板/侧边栏布局），MIT 组件直接搬
+- ⬜ 常规用量页：时间范围切换、hero 大数字+成本估算、Daily Breakdown、模型占比、活动热力图；保留中转站资产侧卡
+- ⬜ 会话页：会话列表（标题/项目/模型/时长/tokens/成本）+ Copy resume command
+- ⬜ 限额页：Claude Max 5h/7d 窗口进度条（OAuth usage 端点 + 强制缓存退避），其余 provider 占位
+- ⬜ Skills 页：My Skills 列表（跨 agent 安装矩阵）；Browse 云端库推迟
+- ⬜ 设置页：Appearance 全量（主题/语言/货币/数字格式）、Account 占位、Limits Display
+- ⬜ 成本估算引擎：移植定价表；estimated 与 reported 永不相加
+- 后备（本批次未排）：项目归属升级 git-root、Cursor/Gemini 采集器
 
 ## v0.5 — 中转站侧对齐批次（向 All API Hub 靠）
 
