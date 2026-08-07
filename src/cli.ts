@@ -1,3 +1,4 @@
+import { runHooks } from "./commands/hooks.js"
 import { runInit } from "./commands/init.js"
 import { runPull } from "./commands/pull.js"
 import { runPush } from "./commands/push.js"
@@ -12,7 +13,8 @@ Usage: usageplane <command>
 
 Commands:
   init      Create ~/.usageplane with a starter config and database
-  sync      Parse client logs into the local database
+  sync      Parse client logs into the local database (auto-pushes when a hub is set)
+  hooks     install | uninstall | status — event-driven sync via Claude Code Stop hook
   push      Send local records to the aggregation hub (see hub in usageplane.yaml)
   pull      Fetch the hub's records so this device shows the merged view
   relays    Query configured relay sites' balances
@@ -31,7 +33,10 @@ switch (command) {
     runInit()
     break
   case "sync":
-    await runSync()
+    await runSync({ quiet: process.argv.includes("--quiet") })
+    break
+  case "hooks":
+    runHooks(process.argv[3])
     break
   case "push":
     await runPush(process.argv[3])

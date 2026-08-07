@@ -120,8 +120,11 @@ export default function TokensPage() {
           <div className="text-center">
             <div className="text-[12px] font-semibold tracking-[0.15em] text-oai-gray-400">TOTAL TOKENS</div>
             <div className="mt-1 font-oai text-display">{fmt(data.totals.total_tokens)}</div>
-            <div className="mt-2 text-[18px] font-bold text-brand-600" title="成本估算引擎待接入（estimated 口径，永不与中转站实扣相加）">
-              $ —
+            <div
+              className="mt-2 text-[18px] font-bold text-brand-600"
+              title="按官方标价估算（订阅用量为等价成本）；estimated 口径，永不与中转站实扣相加"
+            >
+              ${(data.estimated_cost ?? 0).toFixed(2)}
             </div>
           </div>
 

@@ -27,6 +27,12 @@ export interface SessionInfo {
   edits: number
   /** Paste-ready resume command, e.g. `claude --resume <id>`. */
   resume_command: string
+  /**
+   * "agent" = title authored by the AI tool's own metadata (ai-title,
+   * summary, thread_name); "content" = derived from the user's first
+   * message. Content-derived titles never leave this device.
+   */
+  title_source: "agent" | "content"
 }
 
 const EDIT_TOOLS = /"name":\s*"(Edit|Write|MultiEdit|NotebookEdit)"/
@@ -140,6 +146,7 @@ async function scanClaudeSession(filePath: string): Promise<SessionInfo | null> 
     id,
     tool: "claude-code",
     title: aiTitle || summary || title || "(untitled session)",
+    title_source: aiTitle || summary || !title ? "agent" : "content",
     project,
     model: model || "unknown",
     started_at: first,
@@ -218,6 +225,7 @@ async function scanCodexSession(filePath: string, titles: Map<string, string>): 
     id,
     tool: "codex",
     title: titles.get(id) || (project ? `Codex · ${project}` : "Codex session"),
+    title_source: "agent",
     project,
     model: model || "unknown",
     started_at: first,

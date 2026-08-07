@@ -7,7 +7,8 @@ import { Store } from "../core/store.js"
  * Safe to run repeatedly — the hub's upsert is last-write-wins per bucket.
  * Run `sync` first so the push carries fresh data.
  */
-export async function runPush(urlArg?: string): Promise<void> {
+export async function runPush(urlArg?: string, opts: { quiet?: boolean } = {}): Promise<void> {
+  const log = opts.quiet ? () => {} : console.log
   const dir = dataDir()
   const cfg = loadConfig(dir)
   const url = urlArg ?? cfg.hub?.url
@@ -33,7 +34,7 @@ export async function runPush(urlArg?: string): Promise<void> {
     store.close()
   }
   if (records.length === 0) {
-    console.log("nothing to push — run `usageplane sync` first")
+    log("nothing to push — run `usageplane sync` first")
     return
   }
 
@@ -50,5 +51,5 @@ export async function runPush(urlArg?: string): Promise<void> {
     return
   }
   const result = (await res.json()) as { upserted?: number; total?: number }
-  console.log(`pushed ${records.length} buckets → hub upserted ${result.upserted}, hub now holds ${result.total} records`)
+  log(`pushed ${records.length} buckets → hub upserted ${result.upserted}, hub now holds ${result.total} records`)
 }

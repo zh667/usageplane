@@ -35,6 +35,12 @@ export interface HubConfig {
   token?: string
   /** Name of an env var holding the token. Wins over `token`. */
   token_env?: string
+  /**
+   * Sync session metadata (agent-authored titles, counts) to the hub.
+   * Defaults to true for self-hosted hubs; must flip to opt-in when the
+   * multi-tenant hosted hub ships.
+   */
+  sync_sessions?: boolean
 }
 
 export interface UsagePlaneConfig {

@@ -10,6 +10,8 @@ import { loadConfig, resolveHubToken } from "../core/config.js"
 import { dataDir, dbPath } from "../core/paths.js"
 import { Store, type SessionRow } from "../core/store.js"
 import type { UsageRecord } from "../core/types.js"
+import { allLimits } from "../core/limits.js"
+import { computeRowCost } from "../core/pricing.js"
 import { listSessionsCached } from "../core/sessions.js"
 import { listSkills } from "../core/skills.js"
 import { getAdapter } from "../relays/index.js"
@@ -121,11 +123,15 @@ export function createServer(dir = dataDir()): http.Server {
         const store = new Store(dbPath(dir))
         try {
           const summary = store.rangeSummary(since)
+          const models = summary.models.map((m) => ({ ...m, estimated_cost: computeRowCost(m) }))
+          const estimatedCost = models.reduce((s, m) => s + m.estimated_cost, 0)
           const last7d = store.rangeSummary(new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString()).totals
           const last30d = store.rangeSummary(new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString()).totals
           const span = store.activitySpan()
           json(res, 200, {
             ...summary,
+            models,
+            estimated_cost: estimatedCost,
             last7d: last7d.total_tokens,
             last30d: last30d.total_tokens,
             daily_avg: Math.round(last30d.total_tokens / 30),
@@ -151,6 +157,10 @@ export function createServer(dir = dataDir()): http.Server {
         }
         const merged = [...local, ...remote].sort((a, b) => (b.ended_at ?? "").localeCompare(a.ended_at ?? ""))
         json(res, 200, { device: cfg.device, sessions: merged })
+        return
+      }
+      if (url.pathname === "/api/limits") {
+        json(res, 200, await allLimits())
         return
       }
       if (url.pathname === "/api/skills") {

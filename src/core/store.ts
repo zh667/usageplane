@@ -238,7 +238,7 @@ export class Store {
   rangeSummary(since: string | null): {
     totals: FullTotals
     tools: (ToolTotals & { cached_input_tokens: number })[]
-    models: ModelTotals[]
+    models: (ModelTotals & FullTotals)[]
     days: FullDayTotals[]
   } {
     const where = since ? "WHERE hour_start >= ?" : ""
@@ -262,7 +262,7 @@ export class Store {
         .all(...params) as (ToolTotals & { cached_input_tokens: number })[],
       models: this.db
         .prepare(`SELECT tool, model, ${cols} FROM usage_records ${where} GROUP BY tool, model ORDER BY 8 DESC`)
-        .all(...params) as ModelTotals[],
+        .all(...params) as (ModelTotals & FullTotals)[],
       days: this.db
         .prepare(
           `SELECT substr(hour_start, 1, 10) AS day, ${cols} FROM usage_records ${where} GROUP BY day ORDER BY day DESC LIMIT 31`,

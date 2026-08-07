@@ -61,13 +61,14 @@
 **逐页详细规格：[v0.4-usage-side.md](v0.4-usage-side.md)**（含实景截图核对的要素清单、后端端点、移植来源、验收标准）。概要：
 
 - ✅ 前端栈迁移（2026-08-07）：React+Vite+Tailwind 与上游同栈；oai 设计令牌（绿调灰阶/森林绿/72px display）、侧边栏三分组布局、暗色 class 切换；`serve` 静态托管 dist + SPA 回退（未构建时退回旧内联页）
-- 🔨 常规用量页：范围切换/hero 大数字/工具占比卡/Daily Breakdown 全列/模型排名/活动热力图/中转站侧卡已上线，**首屏即呈现真实双设备合并数据（Windows Codex 58.7% + VPS Claude 41.3%）**；余：成本估算接入、Project Usage 视图、Custom 范围、图标 SVG 化
+- ✅ 常规用量页：范围切换/hero 大数字+成本估算/工具占比卡/Daily Breakdown 全列/模型排名/活动热力图/中转站侧卡，**首屏即真实双设备合并数据**。已知口径差异：我们 Day/Week/Month 是滚动窗口，TT 是日历口径——与 TT 对拍成本时需换算。余留 polish：Project Usage 视图、Custom 范围、图标 SVG 化（v0.5）
 - ✅ 会话页（2026-08-07）：Claude/Codex 会话扫描（summary 优先做标题、轮次/编辑数/token 去重统计、时长）、工具/时间/搜索筛选、Copy resume command；标题只供本机页面，绝不进 hub（隐私铁律）。成本列待定价引擎
-- ⬜ 限额页：Claude Max 5h/7d 窗口进度条（OAuth usage 端点 + 强制缓存退避），其余 provider 占位
+- ✅ 限额页（2026-08-08）：Claude OAuth usage 端点（5h/7d/按模型 scoped weekly 三类窗口全解析）+ 120s 缓存 + 429/503 退避持久化（该端点与 Claude Code 共享配额，低频是硬约束）；%used/%left 跟随 Settings 偏好；Codex/Cursor/Gemini 占位。实测：5h 27% / 7d 15% / Fable 26% 与 TT 同源一致
 - ✅ Skills 页（2026-08-08）：My Skills 列表——扫描各 agent 用户级技能目录、frontmatter 解析、同名跨 agent 合并成安装矩阵徽章、agent 筛选+搜索；与 TT 同机对照同为 11 skills。Browse tab 占位（依赖云端技能索引，随 v0.3）；管理操作（启停/删除）v0.5
 - ✅ 设置页（2026-08-07）：Appearance（主题三态/货币/数字格式，实测生效）、Account（设备名+hub 状态+登录占位）、Limits Display（%used/%left 偏好，供 Limits 页用）、版本页脚。语言项有意推迟——UI 未做 i18n 前放一个不生效的选择器是假设置（TT 对齐的例外按"上游有而我们暂缺基建"处理）
-- ⬜ 成本估算引擎：移植定价表；estimated 与 reported 永不相加
-- ⬜ **hooks 自动采集（对齐 TT 核心机制，用户定"按他的来"）**：`usageplane init` 向 Claude Code/Codex 配置安装钩子，每次 AI 使用自动触发 sync（+已配 hub 则自动 push）。取代手动 sync/cron——TT 的自动化靠事件钩子而非定时任务。移植参照：TT `src/lib/<provider>-hook.js` + `init.js`/`uninstall.js` 注册
+- ✅ 成本估算引擎（2026-08-08）：移植 TT 定价表（67 模型 exact+alias+fuzzy 三级匹配）与 computeRowCost（分列计费、codex reasoning 不重复计费、未知模型计 0）；estimated 与 reported 永不相加
+- ✅ hooks 自动采集（2026-08-08）：`usageplane hooks install` 向 Claude Code settings.json 装 Stop 钩子——每次响应结束触发 `sync --quiet`（hub 已绑定则 sync 自动附带 push）；install 幂等、uninstall 保留他人钩子。VPS 已装。**Codex 钩子待 Windows 实测后补**（TT 的 codex hook 机制需在有 Codex 的机器上验证）
+- ✅ 隐私加固（2026-08-08，回应用户隐私拷问）：会话标题带 `title_source` 溯源——content 衍生（用户首句）的标题**永不出设备**（入库前置空），仅 agent 生成的标题参与 hub 同步；`hub.sync_sessions: false` 可整体关闭会话同步
 - 后备（本批次未排）：项目归属升级 git-root、Cursor/Gemini 采集器
 
 ## v0.5 — 中转站侧对齐批次（向 All API Hub 靠）

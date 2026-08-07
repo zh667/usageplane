@@ -4,9 +4,15 @@ import { loadConfig } from "../core/config.js"
 import { dataDir, dbPath } from "../core/paths.js"
 import { listSessions } from "../core/sessions.js"
 import { Store } from "../core/store.js"
+import { runPush } from "./push.js"
 
-/** Run all enabled collectors and upsert their buckets into the local store. */
-export async function runSync(): Promise<void> {
+/**
+ * Run all enabled collectors and upsert their buckets into the local store.
+ * When a hub is configured, pushes afterwards (TokenTracker's sync-uploads
+ * behavior); quiet mode is for the Stop hook.
+ */
+export async function runSync(opts: { quiet?: boolean } = {}): Promise<void> {
+  const log = opts.quiet ? () => {} : console.log
   const dir = dataDir()
   const cfg = loadConfig(dir)
   const store = new Store(dbPath(dir))
@@ -16,26 +22,40 @@ export async function runSync(): Promise<void> {
       if (collector === "claude-code") {
         const records = await collectClaudeCode({ deviceId: cfg.device })
         const n = store.upsertUsage(records)
-        console.log(`claude-code: ${n} hourly buckets synced`)
+        log(`claude-code: ${n} hourly buckets synced`)
         total += n
       } else if (collector === "codex") {
         const records = await collectCodex({ deviceId: cfg.device })
         const n = store.upsertUsage(records)
-        console.log(`codex: ${n} hourly buckets synced`)
+        log(`codex: ${n} hourly buckets synced`)
         total += n
-      } else {
+      } else if (!opts.quiet) {
         console.warn(`skipping unknown collector "${collector}" (available: claude-code, codex)`)
       }
     }
     // Session metadata (titles etc. — never message bodies) is stored so
     // push can sync it to the hub and other devices can browse it.
-    const sessions = await listSessions()
-    const nSessions = store.upsertSessionRows(
-      sessions.map((s) => ({ ...s, device_id: cfg.device })),
-    )
-    console.log(`sessions: ${nSessions} synced`)
-    console.log(`done — ${total} buckets, database now holds ${store.countRecords()} records`)
+    // Content-derived titles (user's first message) never leave the device;
+    // hub.sync_sessions: false disables session sync entirely.
+    if (cfg.hub?.sync_sessions !== false) {
+      const sessions = await listSessions()
+      const nSessions = store.upsertSessionRows(
+        sessions.map((s) => ({
+          ...s,
+          device_id: cfg.device,
+          title: s.title_source === "content" ? "" : s.title,
+        })),
+      )
+      log(`sessions: ${nSessions} synced`)
+    }
+    log(`done — ${total} buckets, database now holds ${store.countRecords()} records`)
   } finally {
     store.close()
+  }
+
+  if (cfg.hub?.url) {
+    await runPush(undefined, { quiet: opts.quiet }).catch((err) => {
+      if (!opts.quiet) console.error(`auto-push failed: ${err instanceof Error ? err.message : String(err)}`)
+    })
   }
 }
