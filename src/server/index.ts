@@ -148,6 +148,26 @@ export function createServer(dir = dataDir()): http.Server {
         }
         return
       }
+      if (url.pathname === "/api/export" && req.method === "GET") {
+        // Mirror of ingest: lets satellites `usageplane pull` the hub's full
+        // record set so every device can render the merged view locally.
+        const expected = resolveHubToken(loadConfig(dir).hub)
+        if (!expected) {
+          json(res, 403, { error: "export disabled — set hub.token (or token_env) in usageplane.yaml" })
+          return
+        }
+        if ((req.headers.authorization ?? "") !== `Bearer ${expected}`) {
+          json(res, 401, { error: "bad token" })
+          return
+        }
+        const store = new Store(dbPath(dir))
+        try {
+          json(res, 200, { records: store.allRecords() })
+        } finally {
+          store.close()
+        }
+        return
+      }
       if (url.pathname === "/api/ingest" && req.method === "POST") {
         const expected = resolveHubToken(loadConfig(dir).hub)
         if (!expected) {

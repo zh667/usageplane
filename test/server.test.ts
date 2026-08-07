@@ -127,6 +127,22 @@ test("/api/ingest: 403 without hub token config, 401 with bad token, upserts wit
   })
 })
 
+test("/api/export mirrors ingest auth and returns the full record set", async () => {
+  const dir = seededDir()
+  await withServer(dir, async (base) => {
+    assert.equal((await fetch(`${base}/api/export`)).status, 403, "no hub token → export disabled")
+
+    fs.writeFileSync(path.join(dir, "usageplane.yaml"), "hub:\n  token: s3cret\n")
+    assert.equal((await fetch(`${base}/api/export`, { headers: { authorization: "Bearer nope" } })).status, 401)
+
+    const ok = await fetch(`${base}/api/export`, { headers: { authorization: "Bearer s3cret" } })
+    assert.equal(ok.status, 200)
+    const body = await ok.json()
+    assert.equal(body.records.length, 2)
+    assert.equal(body.records[0].tool, "claude-code")
+  })
+})
+
 test("store aggregation queries group correctly", () => {
   const dir = seededDir()
   const store = new Store(path.join(dir, "usageplane.db"))
