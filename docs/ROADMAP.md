@@ -40,11 +40,11 @@
 
 - ✅ Codex 采集器（2026-08-07）：移植 codex-token-usage 增量状态机（逐行 1:1）+ rollout 事件循环；cached-input 减除、fork 重放双守卫（突发间隙 + 跨日）、跨改写/归档去重；6 个合成夹具测试过。**对拍验收待 Windows 真实日志**（本机无 Codex 数据；Windows 装好后 push 上来即可核对）
 - ✅ 多设备聚合（2026-08-07）：hub 模式——常开设备（VPS）`serve` 暴露 `POST /api/ingest`（Bearer 共享 token，无 token 配置则 403 拒收），卫星设备 `usageplane push`；幂等 upsert 免合并冲突。回环 E2E 验证双推不翻倍；dashboard/status 增加按设备分组视图
-- ⬜ **云端模式（聚合首选，UX 对齐 TokenTracker device-login 流）**：架构自托管（数据在自己 VPS），但命令体验照抄 TokenTracker——
-  - `usageplane hub init`（VPS 一次性）：生成强 token、systemd 常驻、HTTPS 就绪，打印 hub 地址。用户不手配反代——TokenTracker 公司替用户干的服务器运维，我们用一条命令替用户干
-  - `usageplane link <hub地址>`（设备端）：`tokentracker device-login` 的对等物，配对码交换后自动写配置，不手编 yaml（单用户自托管用配对码即可，不需要完整 OAuth 设备流）
-  - `usageplane sync` 在 hub 已绑定时自动附带 push（对齐 TokenTracker sync 即上传的行为）
-  - SSH 隧道降为**备用通道**（云端不可用时降级、临时拉取某台远程机器用量）。依据：用户实测 TokenTracker 官方云端远程有问题，自托管替代且 UX 不打折
+- ⬜ **云端模式（聚合首选，零门槛：默认假设用户没有 VPS）**——三档通道，同一套协议：
+  1. **官方托管 hub（默认档）**：项目方运营的多租户 hub，用户零服务器。UX 完全对齐 TokenTracker：装包 → `usageplane link`（配对码/设备流，隐式建账号，不强制邮箱注册）→ `sync` 自动上传 → 官方域名随处看。前置工作：多租户改造（账号与数据隔离——现有 hub 是单租户共享 token）、托管基础设施选型（自有 VPS 起步 vs InsForge/Supabase 类 BaaS，参考 TokenTracker 用 InsForge 的先例）、隐私声明（只收 token 计数与元数据，延续 privacy 铁律）
+  2. **自托管 hub（数据主权档）**：`usageplane hub init` 一条命令在自己 VPS 上起同款 hub，有 VPS 的用户（中转站玩家画像）data 不出门。协议与官方档完全相同
+  3. **SSH 隧道（备用档）**：云端不可用时降级、临时拉取某台远程机器用量
+  - 运营责任要认账：官方档意味着项目方承担服务器成本、在线率和别人数据的保管责任（AGPL 允许自营 SaaS）。初期可用现有 VPS 起步，量大再迁
 - ⬜ 官方订阅额度窗口（Claude Max/Pro 的 5h/周窗口）
 - ⬜ 更多中转站架构：Veloera / one-hub（按 docs/relay-sites.md 谱系逐个验证）
 - ⬜ 模型价格对比、可用性检测
@@ -70,3 +70,4 @@
 | 2026-08-07 | port-collector skill 固化于 `.claude/skills/`（第二次移植前，按既定规则）；Codex 移植即其活体测试，流程全程可循 |
 | 2026-08-07 | 否掉照搬 TokenTracker 云端 SaaS（第三方托管+账号体系，与本地优先定位冲突），取其"设备推中心 API"骨架自托管实现 |
 | 2026-08-07 | 聚合通道排序（用户定）：**云端（公网 HTTPS hub）为首选，SSH 隧道为备用**。依据：TokenTracker 官方云端远程实测有问题；自托管云端数据仍在自己机器上。应用层协议不变，只是传输暴露方式升级 |
+| 2026-08-07 | **定位下修门槛（用户定）：默认假设用户没有 VPS** → 云端模式必须提供官方托管 hub（多租户 SaaS，TokenTracker 模式），自托管 hub 降为"数据主权档"可选项。项目方承担托管的成本/在线率/数据保管责任 |
