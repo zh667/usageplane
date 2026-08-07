@@ -11,6 +11,7 @@ import { dataDir, dbPath } from "../core/paths.js"
 import { Store, type SessionRow } from "../core/store.js"
 import type { UsageRecord } from "../core/types.js"
 import { listSessionsCached } from "../core/sessions.js"
+import { listSkills } from "../core/skills.js"
 import { getAdapter } from "../relays/index.js"
 import { DASHBOARD_HTML } from "./dashboard-html.js"
 
@@ -150,6 +151,10 @@ export function createServer(dir = dataDir()): http.Server {
         }
         const merged = [...local, ...remote].sort((a, b) => (b.ended_at ?? "").localeCompare(a.ended_at ?? ""))
         json(res, 200, { device: cfg.device, sessions: merged })
+        return
+      }
+      if (url.pathname === "/api/skills") {
+        json(res, 200, await listSkills())
         return
       }
       if (url.pathname === "/api/heatmap") {
