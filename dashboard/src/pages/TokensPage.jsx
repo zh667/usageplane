@@ -25,6 +25,45 @@ const DAY_COLS = [
   ["conversation_count", "Convs"],
 ]
 
+const PROJECT_COLS = [
+  ["project", "Project"],
+  ["total_tokens", "Total"],
+  ["input_tokens", "Input"],
+  ["output_tokens", "Output"],
+  ["cached_input_tokens", "Cached"],
+  ["reasoning_output_tokens", "Reasoning"],
+  ["conversation_count", "Convs"],
+  ["estimated_cost", "Cost"],
+]
+
+function sortRows(rows, sort) {
+  return [...rows].sort((a, b) => {
+    const va = a[sort.key]
+    const vb = b[sort.key]
+    const c = va < vb ? -1 : va > vb ? 1 : 0
+    return sort.dir === "asc" ? c : -c
+  })
+}
+
+/** Accessible sortable header: a real button (keyboard-operable) + aria-sort. */
+function SortableHeader({ col, label, numeric, sort, onSort }) {
+  const active = sort.key === col
+  return (
+    <th aria-sort={active ? (sort.dir === "desc" ? "descending" : "ascending") : "none"} className={numeric ? "n" : ""}>
+      <button
+        onClick={() => onSort(col)}
+        className={`inline-flex items-center gap-0.5 hover:text-oai-gray-600 dark:hover:text-oai-gray-300${numeric ? " w-full justify-end" : ""}`}
+      >
+        {label}
+        {active && <span aria-hidden="true">{sort.dir === "desc" ? "▾" : "▴"}</span>}
+      </button>
+    </th>
+  )
+}
+
+/** Table display keeps the short project name; the full path lives in title. */
+const shortProject = (p) => (p === "unknown" || !p ? "Unknown" : p.split(/[\\/]/).filter(Boolean).pop() || p)
+
 export default function TokensPage() {
   const [range, setRange] = useState("month")
   const [from, setFrom] = useState("")
@@ -33,7 +72,9 @@ export default function TokensPage() {
   const [heat, setHeat] = useState([])
   const [relays, setRelays] = useState([])
   const [relayUsage, setRelayUsage] = useState([])
+  const [view, setView] = useState("daily")
   const [sort, setSort] = useState({ key: "day", dir: "desc" })
+  const [projSort, setProjSort] = useState({ key: "total_tokens", dir: "desc" })
   const [toolDetail, setToolDetail] = useState(null)
   const [err, setErr] = useState(null)
 
@@ -166,13 +207,15 @@ export default function TokensPage() {
             <div className="mb-6 flex flex-wrap items-center gap-2 text-[13px]">
               <input
                 type="date"
+                aria-label="From date"
                 value={from}
                 onChange={(e) => setFrom(e.target.value)}
                 className="rounded-full border border-oai-gray-200 bg-transparent px-3 py-1.5 outline-none focus:border-oai-gray-400 dark:border-oai-gray-800"
               />
-              <span className="text-oai-gray-400">→</span>
+              <span className="text-oai-gray-400" aria-hidden="true">→</span>
               <input
                 type="date"
+                aria-label="To date"
                 value={to}
                 onChange={(e) => setTo(e.target.value)}
                 className="rounded-full border border-oai-gray-200 bg-transparent px-3 py-1.5 outline-none focus:border-oai-gray-400 dark:border-oai-gray-800"
@@ -224,6 +267,16 @@ export default function TokensPage() {
 
           {toolDetail && (
             <div className="mt-4 rounded-xl bg-oai-gray-50 px-4 py-3 dark:bg-oai-gray-800/40">
+              {/* Share is of ALL models in range (matches the card percentages),
+                  not within-source — the headers make the denominator explicit. */}
+              <div className="flex items-baseline justify-between border-b border-oai-gray-200 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-oai-gray-400 dark:border-oai-gray-700">
+                <span>Model</span>
+                <span className="flex shrink-0 gap-4">
+                  <span>Tokens</span>
+                  <span className="w-14 text-right">% of all</span>
+                  <span className="w-16 text-right">Est. cost</span>
+                </span>
+              </div>
               {(toolDetail === "all" ? models : models.filter((m) => m.tool === toolDetail)).map((m) => (
                 <div
                   key={`${m.tool}:${m.model}`}
@@ -242,49 +295,99 @@ export default function TokensPage() {
         </section>
 
         <section className="up-card p-6">
-          <div className="mb-3 flex gap-4 text-[13px]">
-            <span className="rounded-full bg-oai-gray-100 px-3 py-1 font-medium dark:bg-oai-gray-800">Daily Breakdown</span>
+          <div role="tablist" aria-label="Usage breakdown view" className="mb-3 flex gap-2 text-[13px]">
+            {[
+              ["daily", "Daily Breakdown"],
+              ["project", "Project Usage"],
+            ].map(([key, label]) => (
+              <button
+                key={key}
+                role="tab"
+                aria-selected={view === key}
+                onClick={() => setView(key)}
+                className={`rounded-full px-3 py-1 ${
+                  view === key
+                    ? "bg-oai-gray-100 font-medium dark:bg-oai-gray-800"
+                    : "text-oai-gray-400 hover:text-oai-black dark:hover:text-oai-white"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
-          <div className="overflow-x-auto">
-          <table className="up-table min-w-[520px]">
-            <thead>
-              <tr>
-                {DAY_COLS.map(([key, label]) => (
-                  <th
-                    key={key}
-                    className={`cursor-pointer select-none hover:text-oai-gray-600 dark:hover:text-oai-gray-300${key === "day" ? "" : " n"}`}
-                    onClick={() =>
-                      setSort((s) => ({ key, dir: s.key === key && s.dir === "desc" ? "asc" : "desc" }))
-                    }
-                  >
-                    {label}
-                    {sort.key === key && <span className="ml-0.5">{sort.dir === "desc" ? "▾" : "▴"}</span>}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {[...data.days]
-                .sort((a, b) => {
-                  const va = a[sort.key]
-                  const vb = b[sort.key]
-                  const c = va < vb ? -1 : va > vb ? 1 : 0
-                  return sort.dir === "asc" ? c : -c
-                })
-                .map((d) => (
-                <tr key={d.day}>
-                  <td>{d.day}</td>
-                  <td className="n">{fmt(d.total_tokens)}</td>
-                  <td className="n">{fmt(d.input_tokens)}</td>
-                  <td className="n">{fmt(d.output_tokens)}</td>
-                  <td className="n">{fmt(d.cached_input_tokens)}</td>
-                  <td className="n">{fmt(d.reasoning_output_tokens)}</td>
-                  <td className="n">{d.conversation_count}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          </div>
+
+          {view === "daily" && (
+            <div className="overflow-x-auto">
+              <table className="up-table min-w-[520px]">
+                <thead>
+                  <tr>
+                    {DAY_COLS.map(([key, label]) => (
+                      <SortableHeader
+                        key={key}
+                        col={key}
+                        label={label}
+                        numeric={key !== "day"}
+                        sort={sort}
+                        onSort={(col) => setSort((s) => ({ key: col, dir: s.key === col && s.dir === "desc" ? "asc" : "desc" }))}
+                      />
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortRows(data.days, sort).map((d) => (
+                    <tr key={d.day}>
+                      <td>{d.day}</td>
+                      <td className="n">{fmt(d.total_tokens)}</td>
+                      <td className="n">{fmt(d.input_tokens)}</td>
+                      <td className="n">{fmt(d.output_tokens)}</td>
+                      <td className="n">{fmt(d.cached_input_tokens)}</td>
+                      <td className="n">{fmt(d.reasoning_output_tokens)}</td>
+                      <td className="n">{d.conversation_count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {view === "project" && (
+            <div className="overflow-x-auto">
+              <table className="up-table min-w-[600px]">
+                <thead>
+                  <tr>
+                    {PROJECT_COLS.map(([key, label]) => (
+                      <SortableHeader
+                        key={key}
+                        col={key}
+                        label={label}
+                        numeric={key !== "project"}
+                        sort={projSort}
+                        onSort={(col) =>
+                          setProjSort((s) => ({ key: col, dir: s.key === col && s.dir === "desc" ? "asc" : "desc" }))
+                        }
+                      />
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortRows(data.projects ?? [], projSort).map((p) => (
+                    <tr key={p.project}>
+                      <td className="max-w-[180px] truncate" title={p.project}>
+                        {shortProject(p.project)}
+                      </td>
+                      <td className="n">{fmt(p.total_tokens)}</td>
+                      <td className="n">{fmt(p.input_tokens)}</td>
+                      <td className="n">{fmt(p.output_tokens)}</td>
+                      <td className="n">{fmt(p.cached_input_tokens)}</td>
+                      <td className="n">{fmt(p.reasoning_output_tokens)}</td>
+                      <td className="n">{p.conversation_count}</td>
+                      <td className="n">${(p.estimated_cost ?? 0).toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
       </div>
     </div>

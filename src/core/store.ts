@@ -262,6 +262,9 @@ export class Store {
     tools: (ToolTotals & { cached_input_tokens: number })[]
     models: (ModelTotals & FullTotals)[]
     days: FullDayTotals[]
+    /** Grouped at (project, tool, model) so per-project cost can be priced
+     *  per model and then folded — cost is never computable from totals. */
+    project_models: ({ project: string; tool: string; model: string } & FullTotals)[]
   } {
     const clauses: string[] = []
     const params: string[] = []
@@ -299,6 +302,9 @@ export class Store {
           `SELECT substr(hour_start, 1, 10) AS day, ${cols} FROM usage_records ${where} GROUP BY day ORDER BY day DESC LIMIT 31`,
         )
         .all(...params) as FullDayTotals[],
+      project_models: this.db
+        .prepare(`SELECT project, tool, model, ${cols} FROM usage_records ${where} GROUP BY project, tool, model`)
+        .all(...params) as ({ project: string; tool: string; model: string } & FullTotals)[],
     }
   }
 

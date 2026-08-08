@@ -195,12 +195,57 @@ export function createServer(dir = dataDir()): http.Server {
           const summary = store.rangeSummary(since, until)
           const models = summary.models.map((m) => ({ ...m, estimated_cost: computeRowCost(m) }))
           const estimatedCost = models.reduce((s, m) => s + m.estimated_cost, 0)
+          // Fold (project, tool, model) groups into per-project rows; cost is
+          // priced per model group, then summed — never from project totals.
+          const projectMap = new Map<
+            string,
+            {
+              project: string
+              input_tokens: number
+              output_tokens: number
+              cached_input_tokens: number
+              cache_creation_input_tokens: number
+              reasoning_output_tokens: number
+              total_tokens: number
+              conversation_count: number
+              estimated_cost: number
+            }
+          >()
+          for (const g of summary.project_models) {
+            const key = g.project || "unknown"
+            const p =
+              projectMap.get(key) ??
+              projectMap
+                .set(key, {
+                  project: key,
+                  input_tokens: 0,
+                  output_tokens: 0,
+                  cached_input_tokens: 0,
+                  cache_creation_input_tokens: 0,
+                  reasoning_output_tokens: 0,
+                  total_tokens: 0,
+                  conversation_count: 0,
+                  estimated_cost: 0,
+                })
+                .get(key)!
+            p.input_tokens += g.input_tokens
+            p.output_tokens += g.output_tokens
+            p.cached_input_tokens += g.cached_input_tokens
+            p.cache_creation_input_tokens += g.cache_creation_input_tokens
+            p.reasoning_output_tokens += g.reasoning_output_tokens
+            p.total_tokens += g.total_tokens
+            p.conversation_count += g.conversation_count
+            p.estimated_cost += computeRowCost(g)
+          }
+          const projects = [...projectMap.values()].sort((a, b) => b.total_tokens - a.total_tokens)
           const last7d = store.rangeSummary(new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString()).totals
           const last30d = store.rangeSummary(new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString()).totals
           const span = store.activitySpan()
+          const { project_models: _pm, ...summaryOut } = summary
           json(res, 200, {
-            ...summary,
+            ...summaryOut,
             models,
+            projects,
             estimated_cost: estimatedCost,
             last7d: last7d.total_tokens,
             last30d: last30d.total_tokens,

@@ -272,3 +272,31 @@ test("/api/usage custom range: inclusive UTC day bounds, validation errors", asy
     assert.equal((await fetch(`${base}/api/usage?range=nope`)).status, 400)
   })
 })
+
+test("/api/usage projects: per-project rows sum exactly to range totals; unknown kept explicit", async () => {
+  const dir = seededDir()
+  // Add a bucket with an empty project → must surface as "unknown", not vanish.
+  const store2 = new Store(path.join(dir, "usageplane.db"))
+  store2.upsertUsage([
+    {
+      device_id: "test", tool: "codex", project: "", source_kind: "unknown",
+      model: "gpt-5.4", hour_start: "2026-08-07T12:00:00.000Z",
+      input_tokens: 3, output_tokens: 4, cached_input_tokens: 0,
+      cache_creation_input_tokens: 0, reasoning_output_tokens: 0,
+      total_tokens: 7, conversation_count: 1,
+    },
+  ])
+  store2.close()
+  await withServer(dir, async (base) => {
+    const u = await fetch(`${base}/api/usage?range=total`).then((r) => r.json())
+    assert.ok(Array.isArray(u.projects) && u.projects.length === 3)
+    const sum = u.projects.reduce((s: number, p: { total_tokens: number }) => s + p.total_tokens, 0)
+    assert.equal(sum, u.totals.total_tokens, "project rows sum to the range total")
+    const names = u.projects.map((p: { project: string }) => p.project).sort()
+    assert.deepEqual(names, ["proj-a", "proj-b", "unknown"])
+    for (const p of u.projects) assert.equal(typeof p.estimated_cost, "number")
+    // custom range narrows projects consistently with days
+    const narrow = await fetch(`${base}/api/usage?range=custom&from=2026-08-06&to=2026-08-06`).then((r) => r.json())
+    assert.deepEqual(narrow.projects.map((p: { project: string }) => p.project), ["proj-b"])
+  })
+})
