@@ -72,11 +72,11 @@
 - ✅ 隐私加固（2026-08-08，回应用户隐私拷问）：会话标题带 `title_source` 溯源——content 衍生（用户首句）的标题**永不出设备**（入库前置空），仅 agent 生成的标题参与 hub 同步；`hub.sync_sessions: false` 可整体关闭会话同步
 - 后备（本批次未排）：项目归属升级 git-root、Cursor/Gemini 采集器
 
-## v0.5 — 中转站侧对齐批次（向 All API Hub 靠）
+## v0.5 — 中转站侧对齐批次（当前批次，向 All API Hub 靠；用户定 2026-08-08：先于 v0.3 云端）
 
-细节见 FEATURE-MAP.md 中转站侧表：
+批次顺序（用户定）：今日用量/模型统计 → 站点自动识别 → Key 管理与凭证导出 → 价格对比/可用性检测 → 签到 → 更多站点适配。细节见 FEATURE-MAP.md 中转站侧表：
 
-- ⬜ 今日用量/按模型统计（`/api/log/self`，`supports: usage_log` 能力位）
+- 🔨 今日用量/按模型统计（2026-08-08 垂直切片完成）：`usage_log` 能力位 + `fetchTodayUsage`（上游双路径：`/api/log/self/stat` 精确总额，回退分页 `/api/log/self` 聚合；本地时区日界秒级时间戳；分页触顶标记 partial；{items,total} 与裸数组两种载荷形态都收）；按模型分组是我们的扩展（同批日志行按 model_name 累加）；sk- key 无法读管理日志 API，明确报错降级。`GET /api/relays/usage`（240s 缓存）+ CLI `relays` 今日行 + 面板中转站卡今日消费/模型排名。真实站点 30 天窗口验证：131 请求/13 模型解析正确。**待与网页后台对拍关账**
 - ⬜ 更多站点架构：Veloera / one-hub / Sub2API…（按 relay-sites.md 谱系逐个验证）
 - ⬜ 模型价格对比、可用性检测
 - ⬜ Key 管理（列出/复制/创建）与凭证导出（CherryStudio / CC Switch）

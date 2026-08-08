@@ -88,8 +88,61 @@ interface RelayStatus {
 }
 
 /** Build the local server. Reads config/store from `dir` on every request so `sync` results appear without restart. */
+interface RelayUsageStatus {
+  id: string
+  type: string
+  currency: string
+  usd?: number
+  requests?: number
+  prompt_tokens?: number
+  completion_tokens?: number
+  models?: { model: string; usd: number; requests: number; prompt_tokens: number; completion_tokens: number }[]
+  partial?: boolean
+  supported: boolean
+  error?: string
+}
+
 export function createServer(dir = dataDir()): http.Server {
   let relayCache: { at: number; data: RelayStatus[] } | null = null
+  let relayUsageCache: { at: number; data: RelayUsageStatus[] } | null = null
+
+  // Today usage walks paginated logs — cache harder than the balance call.
+  async function relayUsageStatuses(): Promise<RelayUsageStatus[]> {
+    if (relayUsageCache && Date.now() - relayUsageCache.at < RELAY_CACHE_MS * 2) return relayUsageCache.data
+    const cfg = loadConfig(dir)
+    const data = await Promise.all(
+      cfg.relays.map(async (relay): Promise<RelayUsageStatus> => {
+        const base = { id: relay.id, type: relay.type, currency: relay.currency ?? "$" }
+        const adapter = getAdapter(relay.type)
+        if (!adapter?.fetchTodayUsage || !adapter.supports.includes("usage_log")) {
+          return { ...base, supported: false }
+        }
+        try {
+          const u = await adapter.fetchTodayUsage(relay)
+          return {
+            ...base,
+            supported: true,
+            usd: u.usd,
+            requests: u.requests,
+            prompt_tokens: u.prompt_tokens,
+            completion_tokens: u.completion_tokens,
+            models: u.models.map((m) => ({
+              model: m.model,
+              usd: m.usd,
+              requests: m.requests,
+              prompt_tokens: m.prompt_tokens,
+              completion_tokens: m.completion_tokens,
+            })),
+            partial: u.partial,
+          }
+        } catch (err) {
+          return { ...base, supported: true, error: err instanceof Error ? err.message : String(err) }
+        }
+      }),
+    )
+    relayUsageCache = { at: Date.now(), data }
+    return data
+  }
 
   async function relayStatuses(): Promise<RelayStatus[]> {
     if (relayCache && Date.now() - relayCache.at < RELAY_CACHE_MS) return relayCache.data
@@ -306,6 +359,10 @@ export function createServer(dir = dataDir()): http.Server {
       }
       if (url.pathname === "/api/relays") {
         json(res, 200, await relayStatuses())
+        return
+      }
+      if (url.pathname === "/api/relays/usage") {
+        json(res, 200, await relayUsageStatuses())
         return
       }
       if (req.method === "GET" && !url.pathname.startsWith("/api/")) {

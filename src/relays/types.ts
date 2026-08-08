@@ -24,11 +24,37 @@ export interface RelayBalance {
   unlimited?: boolean
 }
 
+export interface RelayModelUsage {
+  model: string
+  /** Consumed quota units for this model today. */
+  quota: number
+  /** Same consumption in USD — the adapter owns the conversion factor. */
+  usd: number
+  requests: number
+  prompt_tokens: number
+  completion_tokens: number
+}
+
+export interface RelayTodayUsage {
+  /** Today's total consumption in quota units — reported_cost, never mixed with estimates. */
+  quota: number
+  usd: number
+  requests: number
+  prompt_tokens: number
+  completion_tokens: number
+  /** Per-model breakdown from consume logs, sorted by quota descending. */
+  models: RelayModelUsage[]
+  /** True when log pagination hit the page cap — totals may undercount. */
+  partial: boolean
+}
+
 export interface RelayAdapter {
   /** Architecture bucket this adapter implements, e.g. "new-api". */
   readonly type: string
   readonly supports: readonly RelayCapability[]
   fetchBalance(relay: RelayConfig, fetchFn?: typeof fetch): Promise<RelayBalance>
+  /** Present only when the adapter supports the "usage_log" capability. */
+  fetchTodayUsage?(relay: RelayConfig, fetchFn?: typeof fetch): Promise<RelayTodayUsage>
 }
 
 const registry = new Map<string, RelayAdapter>()

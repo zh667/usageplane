@@ -29,6 +29,19 @@ export async function runRelays(): Promise<void> {
           : `${cur}${b.balance_usd.toFixed(4)}`
       const scope = b.scope === "key" ? " [key scope — use an access token for account balance]" : ""
       console.log(`${relay.id} (${relay.type}): balance ${balance}${used}${scope}`)
+
+      if (adapter.fetchTodayUsage && adapter.supports.includes("usage_log")) {
+        try {
+          const u = await adapter.fetchTodayUsage(relay)
+          const partial = u.partial ? " (partial — page cap hit)" : ""
+          console.log(`  today: ${cur}${u.usd.toFixed(4)}, ${u.requests} requests${partial}`)
+          for (const m of u.models.slice(0, 8)) {
+            console.log(`    ${m.model.padEnd(32)} ${cur}${m.usd.toFixed(4).padStart(9)}  ${String(m.requests).padStart(4)} req`)
+          }
+        } catch (err) {
+          console.log(`  today: ${err instanceof Error ? err.message : String(err)}`)
+        }
+      }
     } catch (err) {
       console.error(`${relay.id}: ${err instanceof Error ? err.message : String(err)}`)
       failures++
