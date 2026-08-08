@@ -30,7 +30,7 @@ node bin/usageplane.js serve   # 必须从项目根启动（bin 相对路径）�
 npx tsx scripts/compare-claude-tokentracker.mts   # 与 TT 对拍（codex 版在 Windows 跑）
 ```
 
-双机验证循环（每批交付后）：VPS 改完 → commit/push → Windows `git pull; npm install; npm run build` → 实测回报。7690=VPS 后端、7691=Windows 本机 serve（SSH 隧道下 localhost:7690 是 VPS）。
+双机验证循环（每批交付后）：VPS 改完 → commit/push → 按 `docs/review-prompt-template.md` 生成本批审查提示词随交付一起给出 → Windows `git pull; npm install; npm run build` → 实测回报。7690=VPS 后端、7691=Windows 本机 serve（SSH 隧道下 localhost:7690 是 VPS）。
 
 ## Upstream provenance（载荷级约定）
 
