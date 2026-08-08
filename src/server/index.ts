@@ -13,7 +13,7 @@ import type { UsageRecord } from "../core/types.js"
 import { allLimits } from "../core/limits.js"
 import { computeRowCost } from "../core/pricing.js"
 import { listSessionsCached } from "../core/sessions.js"
-import { listSkills } from "../core/skills.js"
+import { listSkills, skillKey } from "../core/skills.js"
 import { getAdapter } from "../relays/index.js"
 import { DASHBOARD_HTML } from "./dashboard-html.js"
 
@@ -230,36 +230,74 @@ export function createServer(dir = dataDir()): http.Server {
         return
       }
       if (url.pathname === "/api/skills") {
-        // Local scan merged with other devices' synced inventories, by name.
+        // Local scan merged with other devices' synced inventories. Every
+        // install is attributed explicitly — including the local device — via
+        // installs[{device, agents}], the real device×agent matrix; the flat
+        // agents/devices arrays remain as filter conveniences.
         const cfg = loadConfig(dir)
-        const byName = new Map<string, { name: string; description: string; agents: string[]; devices: string[] }>()
-        for (const s of await listSkills()) {
-          byName.set(s.name, { ...s, devices: [cfg.device] })
+        interface SkillRow {
+          name: string
+          description: string
+          scope: string
+          source?: string
+          agents: string[]
+          devices: string[]
+          installs: { device: string; agents: string[] }[]
         }
+        const byKey = new Map<string, SkillRow>()
+        const addInstall = (
+          key: string,
+          device: string,
+          s: { name: string; description: string; scope: string; source?: string; agents: string[] },
+        ): void => {
+          const existing = byKey.get(key)
+          if (existing) {
+            if (!existing.devices.includes(device)) existing.devices.push(device)
+            for (const a of s.agents) if (!existing.agents.includes(a)) existing.agents.push(a)
+            if (!existing.description && s.description) existing.description = s.description
+            existing.installs.push({ device, agents: s.agents })
+          } else {
+            byKey.set(key, {
+              name: s.name,
+              description: s.description,
+              scope: s.scope,
+              ...(s.source ? { source: s.source } : {}),
+              agents: [...s.agents],
+              devices: [device],
+              installs: [{ device, agents: s.agents }],
+            })
+          }
+        }
+        for (const s of await listSkills()) addInstall(skillKey(s), cfg.device, s)
         const store = new Store(dbPath(dir))
         try {
           for (const r of store.deviceState("skill")) {
             if (r.device_id === cfg.device) continue
-            const payload = JSON.parse(r.payload) as { description?: string; agents?: string[] }
-            const existing = byName.get(r.key)
-            if (existing) {
-              if (!existing.devices.includes(r.device_id)) existing.devices.push(r.device_id)
-              for (const a of payload.agents ?? []) if (!existing.agents.includes(a)) existing.agents.push(a)
-            } else {
-              byName.set(r.key, {
-                name: r.key,
-                description: payload.description ?? "",
-                agents: payload.agents ?? [],
-                devices: [r.device_id],
-              })
+            const p = JSON.parse(r.payload) as {
+              name?: string
+              description?: string
+              agents?: string[]
+              scope?: string
+              source?: string
             }
+            // Devices on older builds pushed plain-name keys and no scope.
+            const scope = p.scope ?? "user"
+            const name = p.name ?? (r.key.includes(":") ? r.key.split(":").pop() ?? r.key : r.key)
+            const key = r.key.includes(":") ? r.key : `user::${r.key.toLowerCase()}`
+            addInstall(key, r.device_id, {
+              name,
+              description: p.description ?? "",
+              scope,
+              ...(p.source ? { source: p.source } : {}),
+              agents: p.agents ?? [],
+            })
           }
         } finally {
           store.close()
         }
         json(res, 200, {
           device: cfg.device,
-          skills: [...byName.values()].sort((a, b) => a.name.localeCompare(b.name)),
+          skills: [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name) || a.scope.localeCompare(b.scope)),
         })
         return
       }

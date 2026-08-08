@@ -4,7 +4,7 @@ import { loadConfig } from "../core/config.js"
 import { dataDir, dbPath } from "../core/paths.js"
 import { allLimits } from "../core/limits.js"
 import { listSessions } from "../core/sessions.js"
-import { listSkills } from "../core/skills.js"
+import { listSkills, skillKey } from "../core/skills.js"
 import { Store } from "../core/store.js"
 import { runPush } from "./push.js"
 
@@ -56,7 +56,16 @@ export async function runSync(opts: { quiet?: boolean } = {}): Promise<void> {
     store.replaceDeviceState(
       cfg.device,
       "skill",
-      skills.map((s) => ({ key: s.name, payload: JSON.stringify({ description: s.description, agents: s.agents }) })),
+      skills.map((s) => ({
+        key: skillKey(s),
+        payload: JSON.stringify({
+          name: s.name,
+          description: s.description,
+          agents: s.agents,
+          scope: s.scope,
+          ...(s.source ? { source: s.source } : {}),
+        }),
+      })),
     )
     const limits = (await allLimits()).filter((p) => p.connected)
     store.replaceDeviceState(

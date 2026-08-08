@@ -65,7 +65,7 @@
 - ✅ 常规用量页：范围切换/hero 大数字+成本估算/工具占比卡/Daily Breakdown 全列/模型排名/活动热力图/中转站侧卡，**首屏即真实双设备合并数据**。已知口径差异：我们 Day/Week/Month 是滚动窗口，TT 是日历口径——与 TT 对拍成本时需换算。余留 polish：Project Usage 视图、Custom 范围、图标 SVG 化（v0.5）
 - ✅ 会话页（2026-08-07）：Claude/Codex 会话扫描（summary 优先做标题、轮次/编辑数/token 去重统计、时长）、工具/时间/搜索筛选、Copy resume command；标题只供本机页面，绝不进 hub（隐私铁律）。成本列待定价引擎
 - ✅ 限额页（2026-08-08）：Claude OAuth usage 端点（5h/7d/按模型 scoped weekly 三类窗口全解析）+ 120s 缓存 + 429/503 退避持久化（该端点与 Claude Code 共享配额，低频是硬约束）；%used/%left 跟随 Settings 偏好；Codex/Cursor/Gemini 占位。实测：5h 27% / 7d 15% / Fable 26% 与 TT 同源一致
-- ✅ Skills 页（2026-08-08）：My Skills 列表——扫描各 agent 用户级技能目录、frontmatter 解析、同名跨 agent 合并成安装矩阵徽章、agent 筛选+搜索；与 TT 同机对照同为 11 skills。Browse tab 占位（依赖云端技能索引，随 v0.3）；管理操作（启停/删除）v0.5
+- ✅ Skills 页（2026-08-08；扫描重做 2026-08-08 晚，Windows 实测暴露漏扫）：发现语义全面对齐 TT skills-manager——①入口判定 `isDirectory()||isSymbolicLink()`（Windows junction 报告为 symlink，之前全部漏掉）②标记接受 `SKILL.md`/`skill.md` 两种拼写、stat 穿透链接③用户目录递归 3 层支持分组、点目录（`.system` 内置）有意排除（上游同规则）④新增 `~/.agents/skills` 共享根（上游隐藏目标）；**`~/.skills` 上游不认，我们也不扫**⑤插件缓存单独盘点（`plugins/cache` 深度 6 找 `skills` 目录、剥离版本号防升级重复、`scope:"plugin"` 只读展示绝不当用户安装项）。跨设备展示改为显式 `installs:[{device,agents}]` 矩阵——本机也标注设备名，任何设备看同一技能显示一致；页面加 User/Plugin 来源筛选。Browse tab 占位（随 v0.3）；管理操作（启停/删除）v0.5
 - ✅ 设置页（2026-08-07）：Appearance（主题三态/货币/数字格式，实测生效）、Account（设备名+hub 状态+登录占位）、Limits Display（%used/%left 偏好，供 Limits 页用）、版本页脚。语言项有意推迟——UI 未做 i18n 前放一个不生效的选择器是假设置（TT 对齐的例外按"上游有而我们暂缺基建"处理）
 - ✅ 成本估算引擎（2026-08-08）：移植 TT 定价表（67 模型 exact+alias+fuzzy 三级匹配）与 computeRowCost（分列计费、codex reasoning 不重复计费、未知模型计 0）；estimated 与 reported 永不相加
 - ✅ hooks 自动采集（2026-08-08）：`usageplane hooks install` 向 Claude Code settings.json 装 Stop 钩子——每次响应结束触发 `sync --quiet`（hub 已绑定则 sync 自动附带 push）；install 幂等、uninstall 保留他人钩子。VPS 已装。Codex notify 钩子已实现并 Windows 实测（含与 TT 的链式共存，见补课清单）
@@ -116,4 +116,5 @@ Windows 实机四连验证已跑（2026-08-08），结果与后续动作：
 | 2026-08-07 | 隐私边界修订（用户定）：会话**元数据**（标题/计数/时长，正文永不）纳入 hub 同步——hub 是用户自己的服务器，跨设备浏览会话列表是核心诉求。官方托管 hub 时代此项必须转 opt-in。新增 `pull` 命令使任何设备可呈现全量视图 |
 | 2026-08-08 | Codex 对拍口径定案：验收只对五个原始分栏，`total_tokens` 按共享公式（分栏和，reasoning 折入 output）双侧重算——Windows 实测证明 TT 存量账本的存储总数与其自身分栏不一致（旧版漂移），不可作为对照物 |
 | 2026-08-08 | Codex notify 冲突处理：从"外来 notify 绝不覆盖（跳过安装）"升级为**链式共存**——包装为 `notify-chain --then <原命令>`，两个工具都跑，uninstall 原样归还。"绝不丢弃外来配置"的原则不变，实现从回避改为兼容 |
+| 2026-08-08 | Skills 扫描重做（Windows 实测暴露 4 处漏扫后侦察上游定案）：junction/symlink 判定、`.agents` 共享根、插件缓存盘点、深度 3 分组全部照搬 TT skills-manager；`.system` 点目录排除与 `~/.skills` 不扫描均为对齐上游的有意行为。设备来源从"本机隐含"改为显式 installs 矩阵——修复"两台设备看同一技能徽章不一致"的误导 |
 | 2026-08-08 | 中转站侧无插件可行性结论：AAH 特殊功能九成走站点 HTTP API（含 new-api 家族签到端点 `/api/user/checkin`），CLI/服务端可实现；插件独占的只有登录态自动捕获（我们用粘贴 token 替代）与页面注入（不追）；纯 cookie 站签到降级为 cookie 粘贴/无头浏览器/放弃三级 |
