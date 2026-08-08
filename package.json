@@ -10,8 +10,12 @@
   "bin": {
     "usageplane": "./bin/usageplane.js"
   },
+  "workspaces": [
+    "dashboard"
+  ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && npm run build --workspace usageplane-dashboard",
+    "build:server": "tsc",
     "dev": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test 'test/**/*.test.ts'"

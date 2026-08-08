@@ -39,9 +39,18 @@ export interface DiscoveredSkill {
 }
 
 const FETCH_TIMEOUT_MS = 20_000
+/** GLOBAL metadata-fetch concurrency across all repos — not per repo. */
 const DISCOVER_CONCURRENCY = 4
 const DISCOVER_CACHE_TTL_MS = 60 * 60 * 1000
+/** Partial results (some repos failed) get a short TTL so recovery is quick,
+ *  while still absorbing rate-limit storms from repeated Browse opens. */
+const DISCOVER_PARTIAL_TTL_MS = 5 * 60 * 1000
 const MAX_SKILLS_PER_REPO = 200
+// Install-download ceilings — a hostile or bloated repo dir must not be able
+// to exhaust disk or memory through us.
+const MAX_INSTALL_FILES = 200
+const MAX_FILE_BYTES = 2 * 1024 * 1024
+const MAX_TOTAL_BYTES = 20 * 1024 * 1024
 
 export class RateLimitError extends Error {}
 
@@ -174,41 +183,49 @@ function parseFrontmatter(raw: string, fallbackName: string): { name: string; de
   }
 }
 
-async function discoverRepoSkills(repo: DiscoverRepo, fetchFn: typeof fetch): Promise<DiscoveredSkill[]> {
-  const { branch, tree } = await getRepoTree(repo, fetchFn)
-  const markers = tree
-    .filter((e) => e?.type === "blob" && /(^|\/)SKILL\.md$/i.test(e.path ?? ""))
-    .slice(0, MAX_SKILLS_PER_REPO)
-  const skills = await mapWithConcurrency(markers, DISCOVER_CONCURRENCY, async (entry) => {
-    const docPath = (entry.path ?? "").replace(/\\/g, "/")
-    const directory = docPath.replace(/(^|\/)(?:SKILL|skill)\.md$/i, "") || repo.name
-    const installName = directory.split("/").filter(Boolean).pop() ?? repo.name
-    let meta = { name: installName, description: "" }
-    try {
-      const res = await fetchWithTimeout(rawUrl(repo, branch, docPath), "text/plain", fetchFn)
-      meta = parseFrontmatter(await res.text(), installName)
-    } catch (err) {
-      if (err instanceof RateLimitError) throw err
-      // keep discoverable without metadata
-    }
-    return {
-      key: `${repo.owner}/${repo.name}:${directory}`,
-      name: meta.name,
-      description: meta.description,
-      directory,
-      readme_url: docUrl(repo, branch, docPath),
-      repo_owner: repo.owner,
-      repo_name: repo.name,
-      repo_branch: branch,
-    }
-  })
-  return skills
+interface RepoMarkers {
+  repo: DiscoverRepo
+  branch: string
+  docPath: string
+}
+
+export interface DiscoverResult {
+  skills: DiscoveredSkill[]
+  cached: boolean
+  /** True when at least one repo failed — the catalog may be incomplete. */
+  partial: boolean
+  /** Per-repo failure messages, e.g. rate limits, for the UI banner. */
+  errors: string[]
+}
+
+async function skillFromMarker({ repo, branch, docPath }: RepoMarkers, fetchFn: typeof fetch): Promise<DiscoveredSkill> {
+  const clean = docPath.replace(/\\/g, "/")
+  const directory = clean.replace(/(^|\/)(?:SKILL|skill)\.md$/i, "") || repo.name
+  const installName = directory.split("/").filter(Boolean).pop() ?? repo.name
+  let meta = { name: installName, description: "" }
+  try {
+    const res = await fetchWithTimeout(rawUrl(repo, branch, clean), "text/plain", fetchFn)
+    meta = parseFrontmatter(await res.text(), installName)
+  } catch {
+    // keep discoverable without metadata (rate-limited raws included — the
+    // tree already succeeded, so the repo is not reported as failed)
+  }
+  return {
+    key: `${repo.owner}/${repo.name}:${directory}`,
+    name: meta.name,
+    description: meta.description,
+    directory,
+    readme_url: docUrl(repo, branch, clean),
+    repo_owner: repo.owner,
+    repo_name: repo.name,
+    repo_branch: branch,
+  }
 }
 
 export async function discoverSkills(
   { force = false, repos = DEFAULT_REPOS }: { force?: boolean; repos?: DiscoverRepo[] } = {},
   fetchFn: typeof fetch = fetch,
-): Promise<{ skills: DiscoveredSkill[]; cached: boolean; error?: string }> {
+): Promise<DiscoverResult> {
   const fingerprint = repos.map((r) => `${r.owner}/${r.name}@${r.branch}`).sort().join("|")
   if (!force) {
     try {
@@ -216,27 +233,44 @@ export async function discoverSkills(
         fingerprint?: string
         generated_at?: number
         skills?: DiscoveredSkill[]
+        partial?: boolean
+        errors?: string[]
       }
-      if (c.fingerprint === fingerprint && Array.isArray(c.skills) && Date.now() - (c.generated_at ?? 0) < DISCOVER_CACHE_TTL_MS) {
-        return { skills: c.skills, cached: true }
+      const ttl = c.partial ? DISCOVER_PARTIAL_TTL_MS : DISCOVER_CACHE_TTL_MS
+      if (c.fingerprint === fingerprint && Array.isArray(c.skills) && Date.now() - (c.generated_at ?? 0) < ttl) {
+        return { skills: c.skills, cached: true, partial: c.partial ?? false, errors: c.errors ?? [] }
       }
     } catch {
       /* no cache */
     }
   }
-  const settled = await Promise.allSettled(repos.map((r) => discoverRepoSkills(r, fetchFn)))
-  const byKey = new Map<string, DiscoveredSkill>()
-  for (const s of settled.flatMap((r) => (r.status === "fulfilled" ? r.value : []))) byKey.set(s.key.toLowerCase(), s)
-  const skills = [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name))
-  if (skills.length === 0) {
-    const limited = settled.find((r) => r.status === "rejected" && r.reason instanceof RateLimitError)
-    if (limited && limited.status === "rejected") {
-      return { skills: [], cached: false, error: (limited.reason as Error).message }
+
+  // Phase 1: one tree call per repo; failures are reported per repo, never
+  // silently dropped. Phase 2: ONE global concurrency pool over all markers.
+  const errors: string[] = []
+  const markers: RepoMarkers[] = []
+  const settled = await Promise.allSettled(repos.map(async (repo) => ({ repo, ...(await getRepoTree(repo, fetchFn)) })))
+  settled.forEach((r, i) => {
+    if (r.status === "rejected") {
+      const reason = r.reason instanceof Error ? r.reason.message : String(r.reason)
+      errors.push(`${repos[i].owner}/${repos[i].name}: ${reason}`)
+      return
     }
-  }
+    const { repo, branch, tree } = r.value
+    for (const e of tree.filter((t) => t?.type === "blob" && /(^|\/)SKILL\.md$/i.test(t.path ?? "")).slice(0, MAX_SKILLS_PER_REPO)) {
+      markers.push({ repo, branch, docPath: e.path ?? "" })
+    }
+  })
+
+  const fetched = await mapWithConcurrency(markers, DISCOVER_CONCURRENCY, (m) => skillFromMarker(m, fetchFn))
+  const byKey = new Map<string, DiscoveredSkill>()
+  for (const s of fetched) byKey.set(s.key.toLowerCase(), s)
+  const skills = [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name))
+  const partial = errors.length > 0
+
   fs.mkdirSync(path.dirname(cachePath()), { recursive: true })
-  fs.writeFileSync(cachePath(), JSON.stringify({ fingerprint, generated_at: Date.now(), skills }))
-  return { skills, cached: false }
+  fs.writeFileSync(cachePath(), JSON.stringify({ fingerprint, generated_at: Date.now(), skills, partial, errors }))
+  return { skills, cached: false, partial, errors }
 }
 
 /**
@@ -276,11 +310,15 @@ export async function installDiscoveredSkill(
   if (!files.some((e) => /(^|\/)SKILL\.md$/i.test(e.path ?? ""))) {
     return { ok: false, message: "SKILL.md not found in the selected directory" }
   }
+  if (files.length > MAX_INSTALL_FILES) {
+    return { ok: false, message: `skill has ${files.length} files (limit ${MAX_INSTALL_FILES}) — refusing` }
+  }
 
   const temp = path.join(dataDir(), "tmp", `${installName}-${Date.now()}`)
   try {
     fs.rmSync(temp, { recursive: true, force: true })
     fs.mkdirSync(temp, { recursive: true })
+    let totalBytes = 0
     for (const entry of files) {
       const entryPath = String(entry.path)
       const relative = entryPath === sourceDir ? path.basename(entryPath) : entryPath.slice(sourceDir.length + 1)
@@ -289,7 +327,11 @@ export async function installDiscoveredSkill(
       const out = path.join(temp, safe)
       fs.mkdirSync(path.dirname(out), { recursive: true })
       const res = await fetchWithTimeout(rawUrl(repo, branch, entryPath), "text/plain", fetchFn)
-      fs.writeFileSync(out, Buffer.from(await res.arrayBuffer()))
+      const buf = Buffer.from(await res.arrayBuffer())
+      if (buf.byteLength > MAX_FILE_BYTES) throw new Error(`${entryPath} exceeds the ${MAX_FILE_BYTES / 1024 / 1024}MB per-file limit`)
+      totalBytes += buf.byteLength
+      if (totalBytes > MAX_TOTAL_BYTES) throw new Error(`download exceeds the ${MAX_TOTAL_BYTES / 1024 / 1024}MB total limit`)
+      fs.writeFileSync(out, buf)
     }
     fs.rmSync(dest, { recursive: true, force: true })
     fs.mkdirSync(path.dirname(dest), { recursive: true })
@@ -299,24 +341,39 @@ export async function installDiscoveredSkill(
     return { ok: false, message: err instanceof Error ? err.message : String(err) }
   }
 
+  // TRANSACTIONAL apply: any link failure or managed-registry failure rolls
+  // back every link created here plus the managed copy — no partial installs,
+  // no orphaned dirs the Browse tab can't see or uninstall.
+  const rollback = (): void => {
+    removeOwnedLinksTo(dest)
+    fs.rmSync(dest, { recursive: true, force: true })
+  }
   const linked: Record<string, string> = {}
   for (const agent of agents) {
     const r = createOwnedLink(dest, agent, home)
+    if (!r.ok) {
+      rollback()
+      return { ok: false, message: `install failed for ${agent}: ${r.message} — rolled back` }
+    }
     linked[agent] = r.message
   }
-
-  writeManaged([
-    ...managed.filter((m) => m.key !== skill.key),
-    {
-      key: skill.key,
-      name: skill.name || installName,
-      description: skill.description ?? "",
-      directory: installName,
-      repo: `${skill.repo_owner}/${skill.repo_name}`,
-      branch,
-      installed_at: new Date().toISOString(),
-    },
-  ])
+  try {
+    writeManaged([
+      ...managed.filter((m) => m.key !== skill.key),
+      {
+        key: skill.key,
+        name: skill.name || installName,
+        description: skill.description ?? "",
+        directory: installName,
+        repo: `${skill.repo_owner}/${skill.repo_name}`,
+        branch,
+        installed_at: new Date().toISOString(),
+      },
+    ])
+  } catch (err) {
+    rollback()
+    return { ok: false, message: `failed to record install — rolled back (${err instanceof Error ? err.message : err})` }
+  }
   return { ok: true, message: `installed ${installName}`, linked }
 }
 

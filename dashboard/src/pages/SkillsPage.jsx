@@ -113,7 +113,7 @@ export default function SkillsPage() {
     setBusy(true)
     setInstallMsg(null)
     try {
-      const r = await postJson("/api/skills/install", { key: s.key, agents: ["claude-code", "codex"] })
+      const r = await postJson("/api/skills/install", { key: s.key })
       setInstallMsg({ ok: true, text: `${r.message} — Claude: ${r.linked?.["claude-code"]}, Codex: ${r.linked?.codex}` })
       loadBrowse()
       reload()
@@ -166,15 +166,28 @@ export default function SkillsPage() {
     <div className="px-2">
       <h1 className="font-oai text-hero">Skills</h1>
 
-      <div role="tablist" aria-label="Skills view" className="mt-4 flex gap-6 border-b border-oai-gray-200 text-[14px] dark:border-oai-gray-800">
+      <div
+        role="tablist"
+        aria-label="Skills view"
+        className="mt-4 flex gap-6 border-b border-oai-gray-200 text-[14px] dark:border-oai-gray-800"
+        onKeyDown={(e) => {
+          // WAI-ARIA Tabs: arrows move AND activate, focus follows.
+          if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return
+          const next = tab === "my" ? "browse" : "my"
+          setTab(next)
+          document.getElementById(`skills-tab-${next}`)?.focus()
+        }}
+      >
         {[
           ["my", "My Skills"],
           ["browse", "Browse"],
         ].map(([key, label]) => (
           <button
             key={key}
+            id={`skills-tab-${key}`}
             role="tab"
             aria-selected={tab === key}
+            aria-controls={`skills-panel-${key}`}
             tabIndex={tab === key ? 0 : -1}
             onClick={() => setTab(key)}
             className={
@@ -189,7 +202,7 @@ export default function SkillsPage() {
       </div>
 
       {tab === "browse" && (
-        <div role="tabpanel" aria-label="Browse">
+        <div id="skills-panel-browse" role="tabpanel" aria-labelledby="skills-tab-browse">
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <input
               value={browseQ}
@@ -212,6 +225,11 @@ export default function SkillsPage() {
           {installMsg && (
             <div className={`mt-3 rounded-lg px-3 py-2 text-[12px] ${installMsg.ok ? "bg-brand-500/10 text-brand-600" : "bg-red-500/10 text-red-600"}`}>
               {installMsg.text}
+            </div>
+          )}
+          {browse?.partial && (
+            <div className="mt-3 rounded-lg bg-amber-500/10 px-3 py-2 text-[12px] text-amber-600">
+              部分仓库获取失败，目录可能不完整（稍后自动重试）：{(browse.errors ?? []).join("；")}
             </div>
           )}
           {browse?.error && <div className="mt-3 rounded-lg bg-amber-500/10 px-3 py-2 text-[12px] text-amber-600">{browse.error}</div>}
@@ -267,7 +285,7 @@ export default function SkillsPage() {
       )}
 
       {tab === "my" && (
-      <>
+      <div id="skills-panel-my" role="tabpanel" aria-labelledby="skills-tab-my">
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <div className="flex rounded-full border border-oai-gray-200 p-0.5 dark:border-oai-gray-800">
           <button onClick={() => setAgent("all")} className={`up-pill${agent === "all" ? " active" : ""}`}>
@@ -363,7 +381,7 @@ export default function SkillsPage() {
           <div className="p-8 text-center text-oai-gray-400">no skills match</div>
         )}
       </div>
-      </>
+      </div>
       )}
 
       {detail && (

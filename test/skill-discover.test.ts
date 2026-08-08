@@ -133,3 +133,86 @@ test("sanitizeRelativePath: rejects absolute, drive-letter, and dot-dot paths", 
   assert.equal(sanitizeRelativePath("C:\\evil"), null)
   assert.equal(sanitizeRelativePath(""), null)
 })
+
+test("install is transactional: a link conflict rolls back links, managed copy, and registries", async () => {
+  const home = makeEnv()
+  const gh = fakeGithub(
+    [{ path: "tx-skill/SKILL.md" }],
+    { "tx-skill/SKILL.md": "---\nname: tx-skill\ndescription: d\n---\n" },
+  )
+  // Codex target path is already occupied by a real dir → second link fails.
+  fs.mkdirSync(path.join(home, ".codex", "skills", "tx-skill"), { recursive: true })
+
+  const { skills } = await discoverSkills({ repos: REPO }, gh)
+  const r = await installDiscoveredSkill(skills[0], ["claude-code", "codex"], home, gh)
+  assert.equal(r.ok, false)
+  assert.match(r.message, /rolled back/)
+  assert.ok(!fs.existsSync(path.join(process.env.USAGEPLANE_HOME!, "skills", "managed", "tx-skill")), "managed copy rolled back")
+  assert.ok(!fs.existsSync(path.join(home, ".claude", "skills", "tx-skill")), "first link rolled back")
+  assert.equal(readManaged().length, 0, "no managed record")
+  const links = JSON.parse(
+    fs.readFileSync(path.join(process.env.USAGEPLANE_HOME!, "skill-links.json"), "utf8"),
+  ) as { links: unknown[] }
+  assert.equal(links.links.length, 0, "link registry clean")
+})
+
+test("install is transactional: managed-registry write failure rolls everything back", async () => {
+  const home = makeEnv()
+  const gh = fakeGithub(
+    [{ path: "tx2/SKILL.md" }],
+    { "tx2/SKILL.md": "---\nname: tx2\ndescription: d\n---\n" },
+  )
+  // A DIRECTORY at managed.json's path makes the atomic rename fail.
+  fs.mkdirSync(path.join(process.env.USAGEPLANE_HOME!, "skills", "managed.json"), { recursive: true })
+
+  const { skills } = await discoverSkills({ repos: REPO }, gh)
+  const r = await installDiscoveredSkill(skills[0], ["claude-code"], home, gh)
+  assert.equal(r.ok, false)
+  assert.match(r.message, /rolled back/)
+  assert.ok(!fs.existsSync(path.join(process.env.USAGEPLANE_HOME!, "skills", "managed", "tx2")))
+  assert.ok(!fs.existsSync(path.join(home, ".claude", "skills", "tx2")))
+})
+
+test("partial repo failure is reported, never silently cached as complete", async () => {
+  makeEnv()
+  const twoRepos = [
+    { owner: "good", name: "repo", branch: "main" },
+    { owner: "limited", name: "repo", branch: "main" },
+  ]
+  const gh = (async (url: unknown) => {
+    const u = String(url)
+    if (u.includes("limited")) return { ok: false, status: 403, json: async () => ({}), text: async () => "" }
+    if (u.includes("api.github.com")) {
+      return { ok: true, status: 200, json: async () => ({ tree: [{ path: "ok-skill/SKILL.md", type: "blob", sha: "x" }] }) }
+    }
+    return { ok: true, status: 200, text: async () => "---\nname: ok-skill\ndescription: d\n---\n", json: async () => ({}) }
+  }) as unknown as typeof fetch
+
+  const r = await discoverSkills({ repos: twoRepos }, gh)
+  assert.equal(r.skills.length, 1)
+  assert.equal(r.partial, true, "partial flag set")
+  assert.equal(r.errors.length, 1)
+  assert.match(r.errors[0], /limited\/repo/)
+
+  // Cached copy carries the partial flag so the banner survives cache hits.
+  const cached = await discoverSkills({ repos: twoRepos }, (async () => {
+    throw new Error("no net")
+  }) as unknown as typeof fetch)
+  assert.equal(cached.cached, true)
+  assert.equal(cached.partial, true)
+  assert.deepEqual(cached.errors, r.errors)
+})
+
+test("install download limits: oversized single files are refused", async () => {
+  const home = makeEnv()
+  const big = "x".repeat(2 * 1024 * 1024 + 1)
+  const gh = fakeGithub(
+    [{ path: "big/SKILL.md" }, { path: "big/huge.bin" }],
+    { "big/SKILL.md": "---\nname: big\ndescription: d\n---\n", "big/huge.bin": big },
+  )
+  const { skills } = await discoverSkills({ repos: REPO }, gh)
+  const r = await installDiscoveredSkill(skills.find((s) => s.name === "big")!, ["claude-code"], home, gh)
+  assert.equal(r.ok, false)
+  assert.match(r.message, /per-file limit/)
+  assert.ok(!fs.existsSync(path.join(process.env.USAGEPLANE_HOME!, "skills", "managed", "big")))
+})

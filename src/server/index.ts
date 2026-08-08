@@ -25,6 +25,10 @@ const MAX_INGEST_BYTES = 32 * 1024 * 1024
 
 const LOCAL_HOSTNAMES = new Set(["127.0.0.1", "localhost", "[::1]", "::1"])
 
+/** Discover installs always target these agents; per-agent tuning happens
+ *  afterwards in the My Skills drawer. Never taken from the request body. */
+const INSTALL_AGENTS = ["claude-code", "codex"] as const
+
 /**
  * Guard for unauthenticated endpoints that WRITE to the local filesystem.
  * Loopback binding alone doesn't stop DNS rebinding or a browser page firing
@@ -357,20 +361,21 @@ export function createServer(dir = dataDir(), homeDir = os.homedir()): http.Serv
           json(res, 403, { error: guard })
           return
         }
-        const body = JSON.parse(await readBody(req, 64 * 1024)) as { key?: string; agents?: string[] }
-        if (typeof body.key !== "string" || !Array.isArray(body.agents) || body.agents.length === 0) {
-          json(res, 400, { error: "body must be {key, agents: [...]}" })
+        const body = JSON.parse(await readBody(req, 64 * 1024)) as { key?: string }
+        if (typeof body.key !== "string") {
+          json(res, 400, { error: "body must be {key}" })
           return
         }
         // Resolve the key against the current discover cache/fetch — install
         // parameters come from OUR discovery data, never raw client fields.
+        // Target agents are a fixed server-side allowlist, not client input.
         const { skills } = await discoverSkills()
         const skill = skills.find((s) => s.key === body.key)
         if (!skill) {
           json(res, 404, { error: "unknown skill key — refresh Browse and retry" })
           return
         }
-        const result = await installDiscoveredSkill(skill, body.agents.map(String), homeDir)
+        const result = await installDiscoveredSkill(skill, [...INSTALL_AGENTS], homeDir)
         if (result.ok) await rescanSkillState()
         json(res, result.ok ? 200 : 409, result)
         return
