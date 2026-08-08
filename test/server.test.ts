@@ -300,3 +300,56 @@ test("/api/usage projects: per-project rows sum exactly to range totals; unknown
     assert.deepEqual(narrow.projects.map((p: { project: string }) => p.project), ["proj-b"])
   })
 })
+
+test("skills management API: detail, toggle round-trip, refresh updates device_state", async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "usageplane-skillsrv-"))
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "usageplane-skillsrv-data-"))
+  process.env.USAGEPLANE_HOME = dir
+  fs.writeFileSync(path.join(dir, "usageplane.yaml"), "device: dev-a\n")
+  const sp = path.join(home, ".claude", "skills", "srv-skill")
+  fs.mkdirSync(sp, { recursive: true })
+  fs.writeFileSync(path.join(sp, "SKILL.md"), "---\nname: srv-skill\ndescription: managed\n---\n")
+
+  const server = createServer(dir, home)
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+  const { port } = server.address() as AddressInfo
+  const base = `http://127.0.0.1:${port}`
+  try {
+    const detail = await fetch(`${base}/api/skills/detail?key=user::srv-skill`).then((r) => r.json())
+    assert.equal(detail.manageable, true)
+    assert.ok(detail.paths["claude-code"])
+
+    const on = await fetch(`${base}/api/skills/toggle`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ key: "user::srv-skill", agent: "codex", enable: true }),
+    })
+    assert.equal(on.status, 200)
+    // Success must immediately rescan into device_state (requirement 8).
+    const store = new Store(path.join(dir, "usageplane.db"))
+    const row = store.deviceState("skill").find((r) => r.key === "user::srv-skill")
+    store.close()
+    assert.ok(row, "device_state updated after toggle")
+    assert.deepEqual((JSON.parse(row!.payload) as { agents: string[] }).agents.sort(), ["claude-code", "codex"])
+
+    const off = await fetch(`${base}/api/skills/toggle`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ key: "user::srv-skill", agent: "codex", enable: false }),
+    })
+    assert.equal(off.status, 200)
+
+    const bad = await fetch(`${base}/api/skills/toggle`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ key: "user::srv-skill", agent: "../evil", enable: true }),
+    })
+    assert.equal(bad.status, 409, "unknown agent rejected")
+
+    assert.equal((await fetch(`${base}/api/skills/refresh`, { method: "POST" })).status, 200)
+    assert.equal((await fetch(`${base}/api/skills/detail?key=user::nope`)).status, 404)
+  } finally {
+    server.close()
+    delete process.env.USAGEPLANE_HOME
+  }
+})

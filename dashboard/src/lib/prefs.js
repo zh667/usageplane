@@ -5,6 +5,8 @@ const KEYS = {
   numbers: "usageplane-numbers", // "compact" | "full"
   currency: "usageplane-currency", // "USD" | "CNY"
   limitsDisplay: "usageplane-limits-display", // "used" | "left"
+  limitsWarn: "usageplane-limits-warn", // "off" | "70" | "80" | "90" — highlight threshold
+  hiddenProviders: "usageplane-hidden-providers", // JSON array of provider ids
 }
 
 export function getPref(name, fallback) {

@@ -4,7 +4,7 @@ import { loadConfig } from "../core/config.js"
 import { dataDir, dbPath } from "../core/paths.js"
 import { allLimits } from "../core/limits.js"
 import { listSessions } from "../core/sessions.js"
-import { listSkills, skillKey } from "../core/skills.js"
+import { listSkills, skillStateRows } from "../core/skills.js"
 import { Store } from "../core/store.js"
 import { runPush } from "./push.js"
 
@@ -53,20 +53,7 @@ export async function runSync(opts: { quiet?: boolean } = {}): Promise<void> {
     // Device-side metadata for the cross-device view: installed skills and
     // subscription-limit snapshots (names and percentages — no secrets).
     const skills = await listSkills()
-    store.replaceDeviceState(
-      cfg.device,
-      "skill",
-      skills.map((s) => ({
-        key: skillKey(s),
-        payload: JSON.stringify({
-          name: s.name,
-          description: s.description,
-          agents: s.agents,
-          scope: s.scope,
-          ...(s.source ? { source: s.source } : {}),
-        }),
-      })),
-    )
+    store.replaceDeviceState(cfg.device, "skill", skillStateRows(skills))
     const limits = (await allLimits()).filter((p) => p.connected)
     store.replaceDeviceState(
       cfg.device,

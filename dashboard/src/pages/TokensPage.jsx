@@ -295,15 +295,30 @@ export default function TokensPage() {
         </section>
 
         <section className="up-card p-6">
-          <div role="tablist" aria-label="Usage breakdown view" className="mb-3 flex gap-2 text-[13px]">
+          <div
+            role="tablist"
+            aria-label="Usage breakdown view"
+            className="mb-3 flex gap-2 text-[13px]"
+            onKeyDown={(e) => {
+              // Full WAI-ARIA Tabs pattern: arrows move + activate; only the
+              // active tab sits in the page Tab order (roving tabindex).
+              if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return
+              const next = view === "daily" ? "project" : "daily"
+              setView(next)
+              document.getElementById(`tokens-tab-${next}`)?.focus()
+            }}
+          >
             {[
               ["daily", "Daily Breakdown"],
               ["project", "Project Usage"],
             ].map(([key, label]) => (
               <button
                 key={key}
+                id={`tokens-tab-${key}`}
                 role="tab"
                 aria-selected={view === key}
+                aria-controls={`tokens-panel-${key}`}
+                tabIndex={view === key ? 0 : -1}
                 onClick={() => setView(key)}
                 className={`rounded-full px-3 py-1 ${
                   view === key
@@ -317,7 +332,7 @@ export default function TokensPage() {
           </div>
 
           {view === "daily" && (
-            <div className="overflow-x-auto">
+            <div id="tokens-panel-daily" role="tabpanel" aria-labelledby="tokens-tab-daily" className="overflow-x-auto">
               <table className="up-table min-w-[520px]">
                 <thead>
                   <tr>
@@ -351,7 +366,7 @@ export default function TokensPage() {
           )}
 
           {view === "project" && (
-            <div className="overflow-x-auto">
+            <div id="tokens-panel-project" role="tabpanel" aria-labelledby="tokens-tab-project" className="overflow-x-auto">
               <table className="up-table min-w-[600px]">
                 <thead>
                   <tr>

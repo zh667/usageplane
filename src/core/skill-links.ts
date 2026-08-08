@@ -1,0 +1,125 @@
+// Local skill link management — the write half of the Skills page. Semantics
+// ported from TokenTracker skills-manager.js (MIT): link-per-target install,
+// idempotent sync/remove, path-containment guards. Our own hard rules on top:
+//  - only USER-scope local skills are manageable; plugin caches are read-only
+//  - removal only ever deletes links RECORDED IN OUR REGISTRY — a real skill
+//    directory, or a link the user made themselves, is never touched
+//  - Windows gets junctions (no admin needed), Unix gets dir symlinks
+
+import fs from "node:fs"
+import path from "node:path"
+import os from "node:os"
+import { dataDir } from "./paths.js"
+import { agentSkillDirs, listSkills, skillKey, type SkillInfo } from "./skills.js"
+
+interface LinkRecord {
+  target: string
+  source: string
+  created_at: string
+}
+
+interface LinkRegistry {
+  links: LinkRecord[]
+}
+
+function registryPath(): string {
+  return path.join(dataDir(), "skill-links.json")
+}
+
+function readRegistry(): LinkRegistry {
+  try {
+    const raw = JSON.parse(fs.readFileSync(registryPath(), "utf8")) as LinkRegistry
+    return Array.isArray(raw.links) ? raw : { links: [] }
+  } catch {
+    return { links: [] }
+  }
+}
+
+function writeRegistry(reg: LinkRegistry): void {
+  fs.mkdirSync(path.dirname(registryPath()), { recursive: true })
+  fs.writeFileSync(registryPath(), JSON.stringify(reg, null, 2))
+}
+
+function pathStrictlyWithin(parent: string, child: string): boolean {
+  const rel = path.relative(parent, child)
+  return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel)
+}
+
+function isLink(p: string): boolean {
+  try {
+    return fs.lstatSync(p).isSymbolicLink()
+  } catch {
+    return false
+  }
+}
+
+export interface LinkResult {
+  ok: boolean
+  message: string
+}
+
+async function findManageableSkill(home: string, key: string): Promise<SkillInfo | LinkResult> {
+  const skill = (await listSkills(home)).find((s) => skillKey(s) === key)
+  if (!skill) return { ok: false, message: "skill not found on this device" }
+  if (skill.scope !== "user") return { ok: false, message: "plugin-cache skills are read-only" }
+  return skill
+}
+
+/** Install a user-scope skill for another agent by linking its existing dir. */
+export async function linkSkill(key: string, agent: string, home = os.homedir()): Promise<LinkResult> {
+  const dirs = agentSkillDirs(home)
+  const root = dirs[agent]
+  if (!root) return { ok: false, message: `unknown agent "${agent}"` }
+
+  const found = await findManageableSkill(home, key)
+  if (!("name" in found)) return found
+  if (found.paths?.[agent]) return { ok: true, message: "already installed — nothing to do" }
+
+  const source = Object.values(found.paths ?? {})[0]
+  if (!source) return { ok: false, message: "no local install to link from" }
+
+  // Target name comes from the scanned source dir's basename — never from
+  // client input — and must resolve strictly inside the agent's skills root.
+  const target = path.resolve(root, path.basename(source))
+  if (!pathStrictlyWithin(path.resolve(root), target)) {
+    return { ok: false, message: "refusing target outside the skills root" }
+  }
+  if (fs.existsSync(target) || isLink(target)) {
+    return { ok: false, message: "target path already exists — refusing to overwrite" }
+  }
+
+  fs.mkdirSync(root, { recursive: true })
+  // Junctions work without admin rights on Windows; symlinkSync falls back to
+  // copying nothing — a failure here surfaces to the caller as-is.
+  fs.symlinkSync(source, target, process.platform === "win32" ? "junction" : "dir")
+  const reg = readRegistry()
+  reg.links.push({ target, source, created_at: new Date().toISOString() })
+  writeRegistry(reg)
+  return { ok: true, message: `linked for ${agent}` }
+}
+
+/** Remove an agent's install ONLY when it is a link recorded in our registry. */
+export async function unlinkSkill(key: string, agent: string, home = os.homedir()): Promise<LinkResult> {
+  const found = await findManageableSkill(home, key)
+  if (!("name" in found)) return found
+
+  const target = found.paths?.[agent]
+  if (!target) return { ok: true, message: "not installed for this agent — nothing to do" }
+  if (Object.keys(found.paths ?? {}).length === 1) {
+    return { ok: false, message: "last remaining install — refusing to remove the skill itself" }
+  }
+  if (!isLink(target)) {
+    return { ok: false, message: "real directory, not a link — remove it manually if intended" }
+  }
+  const reg = readRegistry()
+  const idx = reg.links.findIndex((l) => path.resolve(l.target) === path.resolve(target))
+  if (idx === -1) {
+    return { ok: false, message: "link was not created by usageplane — remove it manually if intended" }
+  }
+  // rm does not follow symlinks — with isLink verified above this removes the
+  // link/junction itself, never the linked skill's contents (upstream removePath).
+  fs.rmSync(target, { recursive: true, force: true })
+  reg.links.splice(idx, 1)
+  writeRegistry(reg)
+  return { ok: true, message: `removed ${agent} link` }
+}

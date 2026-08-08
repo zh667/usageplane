@@ -1,16 +1,33 @@
 // Mirrors TokenTracker SkillsPage (My Skills tab): agent filter + search +
 // count, rows with skill name, description excerpt, and per-agent install
-// chips. Browse (cloud skill library) is deferred — it depends on a hosted
-// index we don't run yet.
+// chips. Detail drawer manages LOCAL user-scope installs via link toggles;
+// plugin caches stay read-only and remote rows are display-only. Browse
+// (cloud skill library) is deferred — it depends on a hosted index.
 import { useEffect, useMemo, useState } from "react"
+import { IconClose, IconRefresh } from "../components/icons.jsx"
 import { getJson } from "../lib/format.js"
 
 const AGENT_LABELS = { "claude-code": "Claude", codex: "Codex", agents: "Shared" }
+const MANAGED_AGENTS = ["claude-code", "codex", "agents"]
 const SCOPES = [
   ["all", "All sources"],
   ["user", "User"],
   ["plugin", "Plugin"],
 ]
+
+/** Must mirror the server's skillKey() — used to address rows in the API. */
+const clientKey = (s) => `${s.scope}:${s.source ?? ""}:${s.name.toLowerCase()}`
+
+async function postJson(url, body) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.message || data.error || `HTTP ${res.status}`)
+  return data
+}
 
 export default function SkillsPage() {
   const [skills, setSkills] = useState(null)
@@ -19,15 +36,62 @@ export default function SkillsPage() {
   const [agent, setAgent] = useState("all")
   const [scope, setScope] = useState("all")
   const [q, setQ] = useState("")
+  const [detail, setDetail] = useState(null) // the selected list row
+  const [localInfo, setLocalInfo] = useState(null) // /api/skills/detail for local rows
+  const [opMsg, setOpMsg] = useState(null)
+  const [busy, setBusy] = useState(false)
 
-  useEffect(() => {
+  const reload = () =>
     getJson("/api/skills")
       .then((d) => {
         setSelfDevice(d.device ?? "")
         setSkills(d.skills ?? [])
+        return d
       })
       .catch(setErr)
+
+  useEffect(() => {
+    reload()
   }, [])
+
+  const openDetail = (s) => {
+    setDetail(s)
+    setOpMsg(null)
+    setLocalInfo(null)
+    getJson(`/api/skills/detail?key=${encodeURIComponent(clientKey(s))}`)
+      .then(setLocalInfo)
+      .catch(() => setLocalInfo(null)) // 404 = not installed locally (remote-only row)
+  }
+
+  const toggle = async (agentId, enable) => {
+    if (!detail) return
+    setBusy(true)
+    setOpMsg(null)
+    try {
+      const r = await postJson("/api/skills/toggle", { key: clientKey(detail), agent: agentId, enable })
+      setOpMsg({ ok: true, text: r.message })
+      const d = await reload()
+      const fresh = (d?.skills ?? []).find((x) => clientKey(x) === clientKey(detail))
+      if (fresh) setDetail(fresh)
+      getJson(`/api/skills/detail?key=${encodeURIComponent(clientKey(detail))}`)
+        .then(setLocalInfo)
+        .catch(() => setLocalInfo(null))
+    } catch (e) {
+      setOpMsg({ ok: false, text: e.message })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const refresh = async () => {
+    setBusy(true)
+    try {
+      await postJson("/api/skills/refresh")
+      await reload()
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const agents = useMemo(
     () => [...new Set((skills ?? []).flatMap((s) => s.agents))].sort(),
@@ -82,6 +146,14 @@ export default function SkillsPage() {
           placeholder="Filter installed skills…"
           className="w-64 rounded-full border border-oai-gray-200 bg-transparent px-4 py-1.5 text-[13px] outline-none placeholder:text-oai-gray-400 focus:border-oai-gray-400 dark:border-oai-gray-800"
         />
+        <button
+          onClick={refresh}
+          disabled={busy}
+          title="Rescan skill directories (no files are modified)"
+          className="rounded-full border border-oai-gray-200 p-2 text-oai-gray-500 hover:text-oai-black disabled:opacity-50 dark:border-oai-gray-800 dark:hover:text-oai-white"
+        >
+          <IconRefresh size={14} />
+        </button>
         <span className="ml-auto text-[12px] text-oai-gray-400">
           {skills ? `${filtered.length} of ${skills.length} skills` : "loading…"}
         </span>
@@ -92,7 +164,11 @@ export default function SkillsPage() {
         {filtered.map((s) => (
           <div
             key={`${s.scope}:${s.source ?? ""}:${s.name}`}
-            className="border-b border-oai-gray-100 py-3.5 last:border-0 dark:border-oai-gray-800/60"
+            onClick={() => openDetail(s)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), openDetail(s))}
+            className="-mx-2 cursor-pointer border-b border-oai-gray-100 px-2 py-3.5 last:border-0 hover:bg-oai-gray-50 dark:border-oai-gray-800/60 dark:hover:bg-oai-gray-800/40"
           >
             {/* flex-wrap lets the matrix drop to its own row on narrow
                 viewports instead of stretching the document sideways. */}
@@ -141,6 +217,91 @@ export default function SkillsPage() {
           <div className="p-8 text-center text-oai-gray-400">no skills match</div>
         )}
       </div>
+
+      {detail && (
+        <div className="fixed inset-0 z-30">
+          <div className="absolute inset-0 bg-black/20" onClick={() => setDetail(null)} />
+          <aside className="absolute inset-y-0 right-0 w-[400px] max-w-full overflow-y-auto border-l border-oai-gray-200 bg-white p-6 shadow-xl dark:border-oai-gray-800 dark:bg-oai-gray-900">
+            <div className="flex items-start justify-between gap-3">
+              <h2 className="min-w-0 truncate text-[18px] font-semibold">{detail.name}</h2>
+              <button
+                onClick={() => setDetail(null)}
+                aria-label="Close"
+                className="rounded-lg p-1.5 text-oai-gray-500 hover:bg-oai-gray-100 dark:hover:bg-oai-gray-800"
+              >
+                <IconClose size={16} />
+              </button>
+            </div>
+
+            {detail.scope === "plugin" && (
+              <div className="mt-2 rounded-lg bg-oai-gray-50 px-3 py-2 text-[12px] text-oai-gray-500 dark:bg-oai-gray-800/60">
+                Plugin cache{detail.source ? ` · ${detail.source}` : ""} — 只读盘点项，随插件升级更新，不提供管理操作
+              </div>
+            )}
+
+            <p className="mt-3 text-[13px] leading-relaxed text-oai-gray-500">{detail.description || "—"}</p>
+
+            <div className="up-nav-label mt-5 px-0">INSTALLS</div>
+            {(detail.installs ?? []).map((inst) => (
+              <div key={inst.device} className="flex items-center justify-between py-1 text-[13px]">
+                <span className={inst.device === selfDevice ? "font-medium" : "text-oai-gray-400"}>
+                  {inst.device === selfDevice ? `${inst.device} (本机)` : inst.device}
+                </span>
+                <span className="flex gap-1.5">
+                  {inst.agents.map((a) => (
+                    <span key={a} className="rounded-full bg-oai-gray-100 px-2 py-0.5 text-[10px] text-oai-gray-500 dark:bg-oai-gray-800">
+                      {AGENT_LABELS[a] ?? a}
+                    </span>
+                  ))}
+                </span>
+              </div>
+            ))}
+
+            {localInfo?.manageable && (
+              <>
+                <div className="up-nav-label mt-5 px-0">本机 AGENT 安装管理</div>
+                {MANAGED_AGENTS.map((a) => {
+                  const installed = Boolean(localInfo.paths?.[a])
+                  return (
+                    <div key={a} className="flex items-center justify-between py-1.5 text-[13px]">
+                      <span className="min-w-0 truncate" title={localInfo.paths?.[a] ?? ""}>
+                        {AGENT_LABELS[a] ?? a}
+                        {installed && <span className="ml-2 text-[11px] text-oai-gray-400">已安装</span>}
+                      </span>
+                      <button
+                        onClick={() => toggle(a, !installed)}
+                        disabled={busy}
+                        className={`rounded-full border px-3 py-1 text-[12px] disabled:opacity-50 ${
+                          installed
+                            ? "border-oai-gray-200 text-oai-gray-500 hover:border-red-300 hover:text-red-600 dark:border-oai-gray-700"
+                            : "border-brand-500 text-brand-600 hover:bg-brand-500/10"
+                        }`}
+                      >
+                        {installed ? "移除链接" : "安装"}
+                      </button>
+                    </div>
+                  )
+                })}
+                <p className="mt-2 text-[11px] leading-relaxed text-oai-gray-400">
+                  安装 = 在目标 agent 的技能根目录创建链接（Windows junction / Unix symlink）；移除只删除
+                  UsagePlane 自己创建的链接，真实技能目录与手工链接永不触碰。
+                </p>
+              </>
+            )}
+            {localInfo === null && detail.scope !== "plugin" && !(detail.devices ?? []).includes(selfDevice) && (
+              <p className="mt-4 text-[12px] text-oai-gray-400">
+                此技能仅安装在远端设备，本机不代操作其文件；到对应设备上管理。
+              </p>
+            )}
+
+            {opMsg && (
+              <div className={`mt-3 rounded-lg px-3 py-2 text-[12px] ${opMsg.ok ? "bg-brand-500/10 text-brand-600" : "bg-red-500/10 text-red-600"}`}>
+                {opMsg.text}
+              </div>
+            )}
+          </aside>
+        </div>
+      )}
     </div>
   )
 }

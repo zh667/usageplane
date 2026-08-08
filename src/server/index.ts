@@ -4,6 +4,7 @@
 
 import fs from "node:fs"
 import http from "node:http"
+import os from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { loadConfig, resolveHubToken } from "../core/config.js"
@@ -13,7 +14,9 @@ import type { UsageRecord } from "../core/types.js"
 import { allLimits } from "../core/limits.js"
 import { computeRowCost } from "../core/pricing.js"
 import { listSessionsCached } from "../core/sessions.js"
-import { listSkills, skillKey } from "../core/skills.js"
+import { listSkills, skillKey, skillStateRows } from "../core/skills.js"
+import { linkSkill, unlinkSkill } from "../core/skill-links.js"
+import { runPush } from "../commands/push.js"
 import { getAdapter } from "../relays/index.js"
 import { DASHBOARD_HTML } from "./dashboard-html.js"
 
@@ -102,8 +105,24 @@ interface RelayUsageStatus {
   error?: string
 }
 
-export function createServer(dir = dataDir()): http.Server {
+export function createServer(dir = dataDir(), homeDir = os.homedir()): http.Server {
   let relayCache: { at: number; data: RelayStatus[] } | null = null
+
+  // After a skills mutation (or explicit refresh): rescan disk truth, update
+  // this device's state rows, and quietly push so other devices converge.
+  async function rescanSkillState(): Promise<void> {
+    const cfg = loadConfig(dir)
+    const skills = await listSkills(homeDir)
+    const store = new Store(dbPath(dir))
+    try {
+      store.replaceDeviceState(cfg.device, "skill", skillStateRows(skills))
+    } finally {
+      store.close()
+    }
+    if (cfg.hub?.url && resolveHubToken(cfg.hub)) {
+      runPush(undefined, { quiet: true }).catch(() => {})
+    }
+  }
   let relayUsageCache: { at: number; data: RelayUsageStatus[] } | null = null
 
   // Today usage walks paginated logs — cache harder than the balance call.
@@ -291,6 +310,41 @@ export function createServer(dir = dataDir()): http.Server {
         json(res, 200, { device: cfg.device, providers: [...local, ...remote] })
         return
       }
+      if (url.pathname === "/api/skills/detail") {
+        // Drawer data for a LOCAL install: SKILL.md metadata + install paths.
+        // Remote-only rows never reach here — no skill content crosses devices.
+        const key = url.searchParams.get("key") ?? ""
+        const skill = (await listSkills(homeDir)).find((s) => skillKey(s) === key)
+        if (!skill) {
+          json(res, 404, { error: "not installed on this device" })
+          return
+        }
+        json(res, 200, { ...skill, manageable: skill.scope === "user" })
+        return
+      }
+      if (url.pathname === "/api/skills/toggle" && req.method === "POST") {
+        const body = JSON.parse(await readBody(req, 64 * 1024)) as {
+          key?: string
+          agent?: string
+          enable?: boolean
+        }
+        if (typeof body.key !== "string" || typeof body.agent !== "string" || typeof body.enable !== "boolean") {
+          json(res, 400, { error: "body must be {key, agent, enable}" })
+          return
+        }
+        const result = body.enable
+          ? await linkSkill(body.key, body.agent, homeDir)
+          : await unlinkSkill(body.key, body.agent, homeDir)
+        if (result.ok) await rescanSkillState()
+        json(res, result.ok ? 200 : 409, result)
+        return
+      }
+      if (url.pathname === "/api/skills/refresh" && req.method === "POST") {
+        // Rescan only — never touches skill files.
+        await rescanSkillState()
+        json(res, 200, { ok: true })
+        return
+      }
       if (url.pathname === "/api/skills") {
         // Local scan merged with other devices' synced inventories. Every
         // install is attributed explicitly — including the local device — via
@@ -330,7 +384,7 @@ export function createServer(dir = dataDir()): http.Server {
             })
           }
         }
-        for (const s of await listSkills()) addInstall(skillKey(s), cfg.device, s)
+        for (const s of await listSkills(homeDir)) addInstall(skillKey(s), cfg.device, s)
         const store = new Store(dbPath(dir))
         try {
           for (const r of store.deviceState("skill")) {

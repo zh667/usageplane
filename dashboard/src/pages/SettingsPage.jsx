@@ -123,6 +123,44 @@ export default function SettingsPage() {
                   onChange={(v) => set("limitsDisplay", v)}
                 />
               </Row>
+              <Row title="Warn threshold" desc="Highlight windows at or above this usage on the Limits page.">
+                <Seg
+                  options={[["off", "Off"], ["70", "70%"], ["80", "80%"], ["90", "90%"]]}
+                  value={getPref("limitsWarn", "80")}
+                  onChange={(v) => set("limitsWarn", v)}
+                />
+              </Row>
+              <Row title="Providers" desc="Hide providers you don't use from the Limits page.">
+                <div className="flex flex-wrap gap-2">
+                  {[["claude", "Claude"], ["codex", "Codex"], ["cursor", "Cursor"], ["gemini", "Gemini"]].map(
+                    ([id, label]) => {
+                      const hidden = (() => {
+                        try {
+                          return JSON.parse(getPref("hiddenProviders", "[]"))
+                        } catch {
+                          return []
+                        }
+                      })()
+                      const isHidden = hidden.includes(id)
+                      return (
+                        <button
+                          key={id}
+                          aria-pressed={!isHidden}
+                          onClick={() =>
+                            set(
+                              "hiddenProviders",
+                              JSON.stringify(isHidden ? hidden.filter((x) => x !== id) : [...hidden, id]),
+                            )
+                          }
+                          className={`up-pill ${isHidden ? "line-through opacity-50" : "active"}`}
+                        >
+                          {label}
+                        </button>
+                      )
+                    },
+                  )}
+                </div>
+              </Row>
             </>
           )}
         </div>

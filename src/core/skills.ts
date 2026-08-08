@@ -17,6 +17,8 @@ export interface SkillInfo {
   scope: "user" | "plugin"
   /** Plugin scope only: publisher/plugin identity with the cache version stripped. */
   source?: string
+  /** Local install dir per agent. Local management only — never synced to a hub. */
+  paths?: Record<string, string>
 }
 
 // Upstream recurses grouped skill dirs to depth 3; plugin caches are walked
@@ -31,7 +33,7 @@ function codexHome(home: string): string {
 
 /** Agent id → user-level skills directory. `.agents/skills` is the shared
  *  cross-agent dir (an upstream scan target too — hidden label there). */
-function agentSkillDirs(home: string): Record<string, string> {
+export function agentSkillDirs(home: string): Record<string, string> {
   return {
     "claude-code": path.join(home, ".claude", "skills"),
     codex: path.join(codexHome(home), "skills"),
@@ -133,11 +135,20 @@ export function skillKey(s: Pick<SkillInfo, "name" | "scope" | "source">): strin
 
 export async function listSkills(home = os.homedir()): Promise<SkillInfo[]> {
   const merged = new Map<string, SkillInfo>()
-  const add = (name: string, description: string, agent: string, scope: "user" | "plugin", source?: string): void => {
+  const add = (
+    name: string,
+    description: string,
+    agent: string,
+    scope: "user" | "plugin",
+    source?: string,
+    dirPath?: string,
+  ): void => {
     const info: SkillInfo = { name, description, agents: [agent], scope, ...(source ? { source } : {}) }
+    if (dirPath) info.paths = { [agent]: dirPath }
     const existing = merged.get(skillKey(info))
     if (existing) {
       if (!existing.agents.includes(agent)) existing.agents.push(agent)
+      if (dirPath) existing.paths = { ...existing.paths, [agent]: dirPath }
       // Plugin caches hold multiple versions; entries arrive in sorted order,
       // so the later (newer) copy's metadata replaces the older (upstream rule).
       if (scope === "plugin" && description) existing.description = description
@@ -149,11 +160,12 @@ export async function listSkills(home = os.homedir()): Promise<SkillInfo[]> {
 
   for (const [agent, dir] of Object.entries(agentSkillDirs(home))) {
     for (const rel of await scanSkillDirs(dir)) {
-      const marker = await findSkillMarker(path.join(dir, rel))
+      const skillDir = path.join(dir, rel)
+      const marker = await findSkillMarker(skillDir)
       if (!marker) continue
       const meta = await readSkillMeta(marker)
       const base = rel.split("/").pop() ?? rel
-      add(meta?.name || base, meta?.description ?? "", agent, "user")
+      add(meta?.name || base, meta?.description ?? "", agent, "user", undefined, skillDir)
     }
   }
 
@@ -161,11 +173,26 @@ export async function listSkills(home = os.homedir()): Promise<SkillInfo[]> {
     for (const hit of await scanPluginCache(root)) {
       const meta = await readSkillMeta(hit.marker)
       const base = hit.relDir.split("/").pop() ?? hit.relDir
-      add(meta?.name || base, meta?.description ?? "", agent, "plugin", hit.source ?? "plugin")
+      add(meta?.name || base, meta?.description ?? "", agent, "plugin", hit.source ?? "plugin", path.dirname(hit.marker))
     }
   }
 
   return [...merged.values()].sort((a, b) => a.name.localeCompare(b.name) || a.scope.localeCompare(b.scope))
+}
+
+/** device_state rows for the "skill" kind — the hub payload NEVER includes
+ *  local filesystem paths. Shared by sync and the server's rescan. */
+export function skillStateRows(skills: SkillInfo[]): { key: string; payload: string }[] {
+  return skills.map((s) => ({
+    key: skillKey(s),
+    payload: JSON.stringify({
+      name: s.name,
+      description: s.description,
+      agents: s.agents,
+      scope: s.scope,
+      ...(s.source ? { source: s.source } : {}),
+    }),
+  }))
 }
 
 /** Parse SKILL.md YAML frontmatter (--- fenced) for name/description. */
