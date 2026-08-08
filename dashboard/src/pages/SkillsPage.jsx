@@ -5,6 +5,7 @@
 // (cloud skill library) is deferred — it depends on a hosted index.
 import { useEffect, useMemo, useState } from "react"
 import { IconClose, IconRefresh } from "../components/icons.jsx"
+import ProviderIcon, { BRAND_CLASS } from "../components/ProviderIcon.jsx"
 import { getJson } from "../lib/format.js"
 
 const AGENT_LABELS = { "claude-code": "Claude", codex: "Codex", agents: "Shared" }
@@ -17,6 +18,24 @@ const SCOPES = [
 
 /** Must mirror the server's skillKey() — used to address rows in the API. */
 const clientKey = (s) => `${s.scope}:${s.source ?? ""}:${s.name.toLowerCase()}`
+
+/** Fixed three-column agent icon matrix: installed marks get full brand
+ *  color, absent ones stay faint — rows stay vertically aligned. */
+function AgentMatrix({ agents, device }) {
+  return (
+    <span className="grid w-[66px] shrink-0 grid-cols-3 justify-items-center">
+      {MANAGED_AGENTS.map((a) => (
+        <ProviderIcon
+          key={a}
+          id={a}
+          size={14}
+          label={`${AGENT_LABELS[a]}${agents.includes(a) ? " installed" : " not installed"}${device ? ` on ${device}` : ""}`}
+          className={agents.includes(a) ? BRAND_CLASS[a] : "opacity-15"}
+        />
+      ))}
+    </span>
+  )
+}
 
 async function postJson(url, body) {
   const res = await fetch(url, {
@@ -163,7 +182,7 @@ export default function SkillsPage() {
   if (err) return <div className="p-8 text-oai-gray-500">load failed: {String(err.message ?? err)}</div>
 
   return (
-    <div className="px-2">
+    <div className="mx-auto max-w-page px-2">
       <h1 className="font-oai text-hero">Skills</h1>
 
       <div
@@ -208,13 +227,13 @@ export default function SkillsPage() {
               value={browseQ}
               onChange={(e) => setBrowseQ(e.target.value)}
               placeholder="Search discoverable skills…"
-              className="w-72 rounded-full border border-oai-gray-200 bg-transparent px-4 py-1.5 text-[13px] outline-none placeholder:text-oai-gray-400 focus:border-oai-gray-400 dark:border-oai-gray-800"
+              className="up-input w-72"
             />
             <button
               onClick={() => loadBrowse(true)}
               disabled={busy || browse === null}
               title="Refetch the skill repositories (bypasses the 1h cache)"
-              className="rounded-full border border-oai-gray-200 p-2 text-oai-gray-500 hover:text-oai-black disabled:opacity-50 dark:border-oai-gray-800 dark:hover:text-oai-white"
+              className="up-btn h-8 w-8 justify-center px-0"
             >
               <IconRefresh size={14} />
             </button>
@@ -233,61 +252,64 @@ export default function SkillsPage() {
             </div>
           )}
           {browse?.error && <div className="mt-3 rounded-lg bg-amber-500/10 px-3 py-2 text-[12px] text-amber-600">{browse.error}</div>}
-          <div className="up-card mt-4 px-5">
-            {browse === null && <div className="p-8 text-oai-gray-400">loading…</div>}
+          {browse === null && <div className="p-8 text-oai-gray-400">loading…</div>}
+          {/* Equal-height card grid: 3 cols wide, 2 medium, 1 narrow. */}
+          <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {browseFiltered.map((s) => (
-              <div key={s.key} className="border-b border-oai-gray-100 py-3.5 last:border-0 dark:border-oai-gray-800/60">
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-                  <span className="flex min-w-0 items-center gap-2 text-[14px] font-semibold">
-                    <span className="truncate">{s.name}</span>
-                    <a
-                      href={s.readme_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="max-w-[240px] truncate rounded-full bg-oai-gray-100 px-2 py-0.5 text-[10px] font-normal text-oai-gray-500 hover:text-oai-black dark:bg-oai-gray-800 dark:hover:text-oai-white"
-                      title={`${s.repo_owner}/${s.repo_name} — view SKILL.md on GitHub`}
-                    >
-                      {s.repo_owner}/{s.repo_name}
-                    </a>
-                  </span>
-                  <span className="ml-auto flex shrink-0 gap-2">
-                    {s.installed ? (
-                      <>
-                        <span className="rounded-full bg-brand-500/10 px-2 py-0.5 text-[11px] text-brand-600">Installed</span>
-                        <button
-                          onClick={() => uninstall(s)}
-                          disabled={busy}
-                          className="rounded-full border border-oai-gray-200 px-3 py-1 text-[12px] text-oai-gray-500 hover:border-red-300 hover:text-red-600 disabled:opacity-50 dark:border-oai-gray-700"
-                        >
-                          卸载
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        onClick={() => install(s)}
-                        disabled={busy}
-                        title="下载到 UsagePlane 托管目录并链接给 Claude 与 Codex"
-                        className="rounded-full border border-brand-500 px-3 py-1 text-[12px] text-brand-600 hover:bg-brand-500/10 disabled:opacity-50"
-                      >
-                        安装
-                      </button>
-                    )}
-                  </span>
+              <div key={s.key} className="up-card flex h-full flex-col p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="min-w-0 truncate text-[14px] font-semibold">{s.name}</span>
+                  <a
+                    href={s.readme_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="max-w-[150px] shrink-0 truncate text-[11px] text-oai-gray-400 hover:text-accent"
+                    title={`${s.repo_owner}/${s.repo_name} — view SKILL.md on GitHub`}
+                  >
+                    {s.repo_owner}/{s.repo_name}
+                  </a>
                 </div>
-                <p className="mt-1 line-clamp-2 max-w-4xl text-[13px] text-oai-gray-500">{s.description || "—"}</p>
+                <p className="mt-1.5 line-clamp-3 flex-1 text-[13px] leading-relaxed text-oai-gray-500">
+                  {s.description || "—"}
+                </p>
+                <div className="mt-3 flex items-center justify-between border-t border-oai-gray-100 pt-3 dark:border-oai-gray-800">
+                  <span className="flex items-center gap-1.5 text-oai-gray-400" title="安装目标：Claude 与 Codex">
+                    <ProviderIcon id="claude" size={14} className={s.installed ? BRAND_CLASS.claude : ""} />
+                    <ProviderIcon id="codex" size={14} className={s.installed ? BRAND_CLASS.codex : ""} />
+                  </span>
+                  {s.installed ? (
+                    <span className="flex items-center gap-2">
+                      <span className="rounded-full bg-success/10 px-2 py-0.5 text-[11px] text-success dark:bg-success-dark/10 dark:text-success-dark">
+                        Installed
+                      </span>
+                      <button onClick={() => uninstall(s)} disabled={busy} className="up-btn danger-hover h-7 text-[12px]">
+                        卸载
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => install(s)}
+                      disabled={busy}
+                      title="下载到 UsagePlane 托管目录并链接给 Claude 与 Codex"
+                      className="up-btn primary h-7 text-[12px]"
+                    >
+                      安装
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
-            {browse !== null && browseFiltered.length === 0 && !browse?.error && (
-              <div className="p-8 text-center text-oai-gray-400">no skills match</div>
-            )}
           </div>
+          {browse !== null && browseFiltered.length === 0 && !browse?.error && (
+            <div className="p-8 text-center text-oai-gray-400">no skills match</div>
+          )}
         </div>
       )}
 
       {tab === "my" && (
       <div id="skills-panel-my" role="tabpanel" aria-labelledby="skills-tab-my">
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <div className="flex rounded-full border border-oai-gray-200 p-0.5 dark:border-oai-gray-800">
+        <div className="up-seg">
           <button onClick={() => setAgent("all")} className={`up-pill${agent === "all" ? " active" : ""}`}>
             All agents
           </button>
@@ -297,7 +319,7 @@ export default function SkillsPage() {
             </button>
           ))}
         </div>
-        <div className="flex rounded-full border border-oai-gray-200 p-0.5 dark:border-oai-gray-800">
+        <div className="up-seg">
           {SCOPES.map(([key, label]) => (
             <button key={key} onClick={() => setScope(key)} className={`up-pill${scope === key ? " active" : ""}`}>
               {label}
@@ -308,13 +330,13 @@ export default function SkillsPage() {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Filter installed skills…"
-          className="w-64 rounded-full border border-oai-gray-200 bg-transparent px-4 py-1.5 text-[13px] outline-none placeholder:text-oai-gray-400 focus:border-oai-gray-400 dark:border-oai-gray-800"
+          className="up-input w-64"
         />
         <button
           onClick={refresh}
           disabled={busy}
           title="Rescan skill directories (no files are modified)"
-          className="rounded-full border border-oai-gray-200 p-2 text-oai-gray-500 hover:text-oai-black disabled:opacity-50 dark:border-oai-gray-800 dark:hover:text-oai-white"
+          className="up-btn h-8 w-8 justify-center px-0"
         >
           <IconRefresh size={14} />
         </button>
@@ -348,28 +370,18 @@ export default function SkillsPage() {
                   </span>
                 )}
               </span>
-              {/* Explicit device×agent matrix — the local device is labeled too,
-                  so the same skill reads identically from any device's page. */}
-              <span className="ml-auto flex min-w-0 flex-wrap justify-end gap-1.5">
+              {/* Explicit device×agent view — the local device is labeled too,
+                  so the same skill reads identically from any device's page.
+                  Fixed-width icon matrix keeps every row's columns aligned. */}
+              <span className="ml-auto flex min-w-0 flex-col items-end gap-0.5">
                 {(s.installs ?? [{ device: "", agents: s.agents }]).map((inst) => (
-                  <span
-                    key={inst.device}
-                    className="flex min-w-0 items-center gap-1 rounded-full border border-oai-gray-200 py-0.5 pl-2 pr-1 dark:border-oai-gray-700"
-                  >
+                  <span key={inst.device} className="flex items-center gap-2">
                     <span
-                      className={`max-w-[150px] truncate text-[10px] ${inst.device === selfDevice ? "font-medium" : "text-oai-gray-400"}`}
+                      className={`max-w-[160px] truncate text-[10px] ${inst.device === selfDevice ? "text-oai-gray-500" : "text-oai-gray-400"}`}
                     >
                       {inst.device === selfDevice ? `${inst.device} (本机)` : inst.device || "—"}
                     </span>
-                    {inst.agents.map((a) => (
-                      <span
-                        key={a}
-                        title={`installed for ${a} on ${inst.device}`}
-                        className="rounded-full bg-oai-gray-100 px-1.5 py-0.5 text-[10px] text-oai-gray-500 dark:bg-oai-gray-800"
-                      >
-                        {AGENT_LABELS[a] ?? a}
-                      </span>
-                    ))}
+                    <AgentMatrix agents={inst.agents} device={inst.device} />
                   </span>
                 ))}
               </span>
@@ -413,13 +425,7 @@ export default function SkillsPage() {
                 <span className={inst.device === selfDevice ? "font-medium" : "text-oai-gray-400"}>
                   {inst.device === selfDevice ? `${inst.device} (本机)` : inst.device}
                 </span>
-                <span className="flex gap-1.5">
-                  {inst.agents.map((a) => (
-                    <span key={a} className="rounded-full bg-oai-gray-100 px-2 py-0.5 text-[10px] text-oai-gray-500 dark:bg-oai-gray-800">
-                      {AGENT_LABELS[a] ?? a}
-                    </span>
-                  ))}
-                </span>
+                <AgentMatrix agents={inst.agents} device={inst.device} />
               </div>
             ))}
 
@@ -442,25 +448,18 @@ export default function SkillsPage() {
                           : "唯一安装"
                   return (
                     <div key={a} className="flex items-center justify-between py-1.5 text-[13px]">
-                      <span className="min-w-0 truncate" title={localInfo.paths?.[a] ?? ""}>
+                      <span className="flex min-w-0 items-center gap-2 truncate" title={localInfo.paths?.[a] ?? ""}>
+                        <ProviderIcon id={a} size={15} className={installed ? BRAND_CLASS[a] : "opacity-30"} />
                         {AGENT_LABELS[a] ?? a}
-                        {stateLabel && <span className="ml-2 text-[11px] text-oai-gray-400">{stateLabel}</span>}
+                        {stateLabel && <span className="ml-1 text-[11px] text-oai-gray-400">{stateLabel}</span>}
                       </span>
                       {!installed && (
-                        <button
-                          onClick={() => toggle(a, true)}
-                          disabled={busy}
-                          className="rounded-full border border-brand-500 px-3 py-1 text-[12px] text-brand-600 hover:bg-brand-500/10 disabled:opacity-50"
-                        >
+                        <button onClick={() => toggle(a, true)} disabled={busy} className="up-btn primary h-7 text-[12px]">
                           安装
                         </button>
                       )}
                       {installed && st?.removable && (
-                        <button
-                          onClick={() => toggle(a, false)}
-                          disabled={busy}
-                          className="rounded-full border border-oai-gray-200 px-3 py-1 text-[12px] text-oai-gray-500 hover:border-red-300 hover:text-red-600 disabled:opacity-50 dark:border-oai-gray-700"
-                        >
+                        <button onClick={() => toggle(a, false)} disabled={busy} className="up-btn danger-hover h-7 text-[12px]">
                           移除链接
                         </button>
                       )}

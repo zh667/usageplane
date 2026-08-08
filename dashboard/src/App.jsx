@@ -13,10 +13,12 @@ export default function App() {
   const close = () => setMenuOpen(false)
 
   return (
-    <div className="min-h-screen lg:flex">
+    // Full-height app shell: the document never scrolls — the main region
+    // owns its scrollbar, so the desktop sidebar stays put at any depth.
+    <div className="flex h-dvh flex-col overflow-hidden lg:flex-row">
       {/* Narrow screens: 56px top bar + drawer nav; the sidebar would
-          otherwise eat 216px of an already-small window. */}
-      <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-oai-gray-200 bg-white/90 px-4 backdrop-blur dark:border-oai-gray-800 dark:bg-oai-gray-900/90 lg:hidden">
+          otherwise eat 220px of an already-small window. */}
+      <header className="z-20 flex h-14 shrink-0 items-center gap-3 border-b border-oai-gray-200 bg-white px-4 dark:border-oai-gray-800 dark:bg-oai-gray-900 lg:hidden">
         <button
           onClick={() => setMenuOpen(true)}
           aria-label="Open menu"
@@ -43,12 +45,13 @@ export default function App() {
         </div>
       )}
 
-      <div className="hidden shrink-0 lg:block">
+      <div className="hidden h-full shrink-0 lg:block">
         <Sidebar />
       </div>
 
-      {/* Pages own their card surfaces — no page-wide outer card. */}
-      <main className="min-w-0 flex-1 p-4 lg:py-5 lg:pl-2 lg:pr-6">
+      {/* Pages own their card surfaces — no page-wide outer card.
+          This is the ONLY vertical scroll region on desktop. */}
+      <main className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 lg:py-5 lg:pl-2 lg:pr-6">
         <Routes>
           <Route path="/" element={<TokensPage />} />
           <Route path="/sessions" element={<SessionsPage />} />

@@ -8,7 +8,7 @@ import { getPref, setPref } from "../lib/prefs.js"
 
 function Seg({ options, value, onChange }) {
   return (
-    <div className="flex rounded-full border border-oai-gray-200 p-0.5 dark:border-oai-gray-800">
+    <div className="up-seg">
       {options.map(([key, label]) => (
         <button key={key} onClick={() => onChange(key)} className={`up-pill${value === key ? " active" : ""}`}>
           {label}
@@ -51,7 +51,7 @@ export default function SettingsPage() {
   }, [])
 
   return (
-    <div className="px-2">
+    <div className="mx-auto max-w-page px-2">
       <h1 className="font-oai text-hero">Settings</h1>
 
       <div className="mt-6 grid gap-8 md:grid-cols-[200px_1fr]">

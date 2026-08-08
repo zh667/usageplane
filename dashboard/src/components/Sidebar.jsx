@@ -49,12 +49,13 @@ export function Brand() {
 
 export default function Sidebar({ onNavigate }) {
   return (
-    <aside className="flex h-full w-[216px] shrink-0 flex-col px-2 pb-3 pt-4">
-      <div className="px-3 pb-2">
+    <aside className="flex h-full w-[220px] shrink-0 flex-col px-2 pb-3 pt-4">
+      <div className="shrink-0 px-3 pb-2">
         <Brand />
       </div>
 
-      <nav className="flex-1">
+      {/* Nav scrolls independently; brand and footer stay visible. */}
+      <nav className="min-h-0 flex-1 overflow-y-auto">
         {GROUPS.map((group) => (
           <div key={group.label}>
             <div className="up-nav-label">{group.label}</div>
@@ -74,11 +75,11 @@ export default function Sidebar({ onNavigate }) {
         ))}
       </nav>
 
-      <div className="flex items-center justify-between px-2">
+      <div className="flex shrink-0 items-center justify-between px-2 pt-2">
         <button
           onClick={toggleTheme}
           title="Toggle theme"
-          className="rounded-full p-1.5 text-oai-gray-500 hover:bg-oai-gray-200 dark:hover:bg-oai-gray-800"
+          className="rounded-md p-1.5 text-oai-gray-500 hover:bg-oai-gray-200 dark:hover:bg-oai-gray-800"
         >
           <IconSun size={15} />
         </button>
@@ -86,7 +87,7 @@ export default function Sidebar({ onNavigate }) {
           href="https://github.com/zh667/usageplane"
           target="_blank"
           rel="noreferrer"
-          className="rounded-full border border-oai-gray-200 px-3 py-1 text-[12px] text-oai-gray-500 hover:text-oai-black dark:border-oai-gray-800 dark:hover:text-oai-white"
+          className="rounded-md border border-oai-gray-200 px-3 py-1 text-[12px] text-oai-gray-500 hover:text-oai-black dark:border-oai-gray-700 dark:hover:text-oai-white"
         >
           GitHub
         </a>

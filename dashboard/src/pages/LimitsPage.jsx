@@ -4,10 +4,9 @@
 // usage at reset), a warn-threshold highlight, and provider visibility —
 // all driven by Settings → Limits Display preferences.
 import { useEffect, useState } from "react"
+import ProviderIcon, { BRAND_CLASS } from "../components/ProviderIcon.jsx"
 import { getJson } from "../lib/format.js"
 import { getPref } from "../lib/prefs.js"
-
-const ICONS = { claude: "✳", codex: "◎", cursor: "▟", gemini: "✦" }
 
 // Why each provider might be disconnected, and what to do about it.
 const CONNECT_HINTS = {
@@ -107,10 +106,13 @@ export default function LimitsPage() {
 
   if (err) return <div className="p-8 text-oai-gray-500">load failed: {String(err.message ?? err)}</div>
 
+  // Connected providers first; disconnected ones collapse into a compact list.
   const visible = providers?.filter((p) => !hidden.includes(p.id))
+  const connected = visible?.filter((p) => p.connected) ?? []
+  const disconnected = visible?.filter((p) => !p.connected) ?? []
 
   return (
-    <div className="px-2">
+    <div className="mx-auto max-w-page px-2">
       <h1 className="font-oai text-hero">Limits</h1>
       <p className="mt-1 text-[15px] text-oai-gray-500">Rate limits and quota usage across your AI tools.</p>
 
@@ -120,41 +122,47 @@ export default function LimitsPage() {
           {warnAt !== null && <span className="ml-2 font-normal normal-case">告警阈值 {warnAt}%</span>}
         </div>
         {providers === null && <div className="p-6 text-oai-gray-400">loading…</div>}
-        {visible?.map((p) => (
+        {connected.map((p) => (
           <div
             key={`${p.device_id}:${p.id}`}
-            className="border-t border-oai-gray-100 py-4 first:border-t-0 dark:border-oai-gray-800"
+            className="grid gap-2 border-t border-oai-gray-100 py-4 first:border-t-0 dark:border-oai-gray-800 sm:grid-cols-[200px_1fr]"
           >
-            <div className="flex items-center gap-2 text-[14px] font-medium">
-              <span className="text-provider-claude">{ICONS[p.id] ?? "•"}</span>
-              {p.name}
-              {p.device_id && p.device_id !== selfDevice && (
-                <span
-                  className="rounded-full bg-oai-gray-100 px-2 py-0.5 text-[10px] font-normal text-oai-gray-500 dark:bg-oai-gray-800"
-                  title={`来自 ${p.device_id} 的同步快照`}
-                >
-                  {p.device_id}
-                </span>
+            <div className="flex items-start gap-2 text-[14px] font-medium">
+              <ProviderIcon id={p.id} size={18} className={BRAND_CLASS[p.id] ?? "text-oai-gray-500"} />
+              <span className="min-w-0">
+                {p.name}
+                {p.device_id && p.device_id !== selfDevice && (
+                  <span
+                    className="ml-2 rounded-full border border-oai-gray-200 px-2 py-px text-[10px] font-normal text-oai-gray-400 dark:border-oai-gray-700"
+                    title={`来自 ${p.device_id} 的同步快照`}
+                  >
+                    {p.device_id}
+                  </span>
+                )}
+              </span>
+            </div>
+            <div className="max-w-[560px]">
+              {p.windows.map((w) => (
+                <Bar key={w.label} window={w} mode={mode} warnAt={warnAt} />
+              ))}
+              {p.error && <div className="mt-1 text-[12px] text-amber-600">{p.error}</div>}
+              {p.windows.length === 0 && !p.error && (
+                <div className="text-[12px] text-oai-gray-400">no windows reported</div>
               )}
             </div>
-            {p.connected ? (
-              <div className="mt-2">
-                {p.windows.map((w) => (
-                  <Bar key={w.label} window={w} mode={mode} warnAt={warnAt} />
-                ))}
-                {p.error && <div className="mt-1 text-[12px] text-amber-600">{p.error}</div>}
-                {p.windows.length === 0 && !p.error && (
-                  <div className="text-[12px] text-oai-gray-400">no windows reported</div>
-                )}
-              </div>
-            ) : (
-              <div className="mt-1 text-[12px] text-oai-gray-400">
-                Not connected
-                {CONNECT_HINTS[p.id] && <span className="ml-2">— {CONNECT_HINTS[p.id]}</span>}
-              </div>
-            )}
           </div>
         ))}
+        {disconnected.length > 0 && (
+          <div className="border-t border-oai-gray-100 pt-3 dark:border-oai-gray-800">
+            {disconnected.map((p) => (
+              <div key={`${p.device_id}:${p.id}`} className="flex items-baseline gap-2 py-1 text-[12px] text-oai-gray-400">
+                <ProviderIcon id={p.id} size={14} className="translate-y-0.5 opacity-50" />
+                <span className="w-14 shrink-0 text-oai-gray-500">{p.name}</span>
+                <span>Not connected{CONNECT_HINTS[p.id] && ` — ${CONNECT_HINTS[p.id]}`}</span>
+              </div>
+            ))}
+          </div>
+        )}
         {visible?.length === 0 && (
           <div className="p-6 text-center text-[13px] text-oai-gray-400">
             所有 Provider 均已在 Settings → Limits Display 中隐藏

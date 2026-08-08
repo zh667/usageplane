@@ -7,8 +7,8 @@
 
 :root {
   color-scheme: light;
-  --oai-font-sans: -apple-system, blinkmacsystemfont, "Segoe UI", roboto, oxygen, ubuntu, sans-serif;
-  --oai-font-mono: "SF Mono", sfmono-regular, ui-monospace, menlo, monaco, consolas, monospace;
+  --oai-font-sans: -apple-system, blinkmacsystemfont, "Segoe UI", "Noto Sans", helvetica, arial, sans-serif;
+  --oai-font-mono: ui-monospace, sfmono-regular, "SF Mono", menlo, consolas, monospace;
 }
 
 .dark {
@@ -54,18 +54,58 @@ body {
   @apply px-3 pb-1 pt-5 text-[11px] font-semibold uppercase tracking-wider text-oai-gray-400;
 }
 
-/* Pill segmented control (Day/Week/Month/Total) */
+/* Segmented control option (Day/Week/Month/Total…). rounded-full is allowed
+   here — a true segmented control — but NOT for normal buttons/inputs. */
 .up-pill {
-  @apply rounded-full px-3.5 py-1.5 text-[13px] text-oai-gray-500 hover:text-oai-black;
+  @apply rounded-full px-3 py-1 text-[13px] text-oai-gray-500 hover:text-oai-black;
 }
 .dark .up-pill {
   @apply text-oai-gray-400 hover:text-oai-white;
 }
 .up-pill.active {
-  @apply bg-oai-gray-200 font-semibold text-oai-black;
+  @apply bg-white font-medium text-oai-black shadow-sm ring-1 ring-oai-gray-200;
 }
 .dark .up-pill.active {
-  @apply bg-oai-gray-800 text-oai-white;
+  @apply bg-oai-gray-800 text-oai-white ring-oai-gray-700;
+}
+
+/* Segmented control container */
+.up-seg {
+  @apply flex rounded-md border border-oai-gray-200 bg-oai-gray-50 p-0.5;
+}
+.dark .up-seg {
+  @apply border-oai-gray-700 bg-oai-gray-900;
+}
+.up-seg .up-pill {
+  @apply rounded-[5px];
+}
+
+/* Standard button (GitHub-style): 6px radius, thin border, 32px height */
+.up-btn {
+  @apply inline-flex h-8 items-center gap-1.5 rounded-md border border-oai-gray-200 bg-white px-3 text-[13px] text-oai-gray-600 hover:bg-oai-gray-50 hover:text-oai-black disabled:opacity-50;
+}
+.dark .up-btn {
+  @apply border-oai-gray-700 bg-oai-gray-800 text-oai-gray-300 hover:bg-oai-gray-700 hover:text-oai-white;
+}
+.up-btn.primary {
+  @apply border-accent bg-white text-accent hover:bg-accent/5;
+}
+.dark .up-btn.primary {
+  @apply border-accent-dark bg-oai-gray-800 text-accent-dark;
+}
+.up-btn.danger-hover:hover {
+  @apply border-danger/40 text-danger;
+}
+.dark .up-btn.danger-hover:hover {
+  @apply border-danger-dark/40 text-danger-dark;
+}
+
+/* Standard text input */
+.up-input {
+  @apply rounded-md border border-oai-gray-200 bg-white px-3 py-1.5 text-[13px] outline-none placeholder:text-oai-gray-400 focus:border-accent;
+}
+.dark .up-input {
+  @apply border-oai-gray-700 bg-oai-gray-900 focus:border-accent-dark;
 }
 
 /* Data table */
@@ -87,4 +127,16 @@ body {
 }
 .up-table .n {
   @apply text-right;
+}
+
+/* Scrollable table region with sticky header — long histories scroll inside
+   the card instead of stretching the page */
+.up-table-scroll {
+  @apply max-h-[480px] overflow-auto;
+}
+.up-table-scroll thead th {
+  @apply sticky top-0 z-10 bg-white;
+}
+.dark .up-table-scroll thead th {
+  @apply bg-oai-gray-900;
 }

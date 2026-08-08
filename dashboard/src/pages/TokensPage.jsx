@@ -98,9 +98,11 @@ export default function TokensPage() {
   const modelTotal = Math.max(1, models.reduce((s, m) => s + m.total_tokens, 0))
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
+    // 12-col grid at xl (4/8 like upstream), centered with a wide-page cap
+    // so ultrawide screens don't scatter the layout.
+    <div className="mx-auto grid max-w-page-wide gap-4 xl:grid-cols-12">
       {/* left column */}
-      <div className="min-w-0 space-y-6">
+      <div className="min-w-0 space-y-4 xl:col-span-4">
         <section className="up-card p-5">
           <div className="grid grid-cols-4 gap-2 text-center">
             {[
@@ -144,7 +146,7 @@ export default function TokensPage() {
 
         <section className="up-card p-5">
           <h3 className="mb-3 text-[12px] font-semibold tracking-wide text-oai-gray-500">中转站资产 · 站点报告值</h3>
-          {relays.length === 0 && <div className="text-[13px] text-oai-gray-400">未配置中转站</div>}
+          {relays.length === 0 && <div className="py-1 text-[12px] text-oai-gray-400">未配置中转站 — 在 usageplane.yaml 添加 relays</div>}
           {relays.map((r) => {
             const u = relayUsage.find((x) => x.id === r.id)
             return (
@@ -184,10 +186,10 @@ export default function TokensPage() {
       </div>
 
       {/* right column */}
-      <div className="min-w-0 space-y-6">
+      <div className="min-w-0 space-y-4 xl:col-span-8">
         <section className="up-card p-6">
           <div className="mb-6 flex items-center justify-between">
-            <div className="flex gap-1">
+            <div className="up-seg">
               {RANGES.map(([key, label]) => (
                 <button key={key} onClick={() => setRange(key)} className={`up-pill${range === key ? " active" : ""}`}>
                   {label}
@@ -197,7 +199,7 @@ export default function TokensPage() {
             <button
               onClick={() => query && getJson(`/api/usage?${query}`).then(setData)}
               title="Refresh"
-              className="rounded-full border border-oai-gray-200 p-2 text-oai-gray-500 hover:text-oai-black dark:border-oai-gray-800 dark:hover:text-oai-white"
+              className="up-btn h-8 w-8 justify-center px-0"
             >
               <IconRefresh size={14} />
             </button>
@@ -210,7 +212,7 @@ export default function TokensPage() {
                 aria-label="From date"
                 value={from}
                 onChange={(e) => setFrom(e.target.value)}
-                className="rounded-full border border-oai-gray-200 bg-transparent px-3 py-1.5 outline-none focus:border-oai-gray-400 dark:border-oai-gray-800"
+                className="up-input"
               />
               <span className="text-oai-gray-400" aria-hidden="true">→</span>
               <input
@@ -218,7 +220,7 @@ export default function TokensPage() {
                 aria-label="To date"
                 value={to}
                 onChange={(e) => setTo(e.target.value)}
-                className="rounded-full border border-oai-gray-200 bg-transparent px-3 py-1.5 outline-none focus:border-oai-gray-400 dark:border-oai-gray-800"
+                className="up-input"
               />
               {from && to && from > to && <span className="text-[12px] text-oai-gray-400">start must be ≤ end</span>}
             </div>
@@ -252,7 +254,7 @@ export default function TokensPage() {
               <button
                 key={c.key}
                 onClick={() => setToolDetail(toolDetail === c.key ? null : c.key)}
-                className={`rounded-xl border px-4 py-3 text-left sm:min-w-[130px] ${
+                className={`rounded-md border px-4 py-3 text-left sm:min-w-[130px] ${
                   toolDetail === c.key
                     ? "border-oai-gray-400 bg-oai-gray-50 dark:border-oai-gray-600 dark:bg-oai-gray-800/60"
                     : "border-oai-gray-200 hover:border-oai-gray-300 dark:border-oai-gray-800 dark:hover:border-oai-gray-700"
@@ -266,7 +268,7 @@ export default function TokensPage() {
           </div>
 
           {toolDetail && (
-            <div className="mt-4 rounded-xl bg-oai-gray-50 px-4 py-3 dark:bg-oai-gray-800/40">
+            <div className="mt-4 rounded-md bg-oai-gray-50 px-4 py-3 dark:bg-oai-gray-800/40">
               {/* Share is of ALL models in range (matches the card percentages),
                   not within-source — the headers make the denominator explicit. */}
               <div className="flex items-baseline justify-between border-b border-oai-gray-200 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-oai-gray-400 dark:border-oai-gray-700">
@@ -332,7 +334,7 @@ export default function TokensPage() {
           </div>
 
           {view === "daily" && (
-            <div id="tokens-panel-daily" role="tabpanel" aria-labelledby="tokens-tab-daily" className="overflow-x-auto">
+            <div id="tokens-panel-daily" role="tabpanel" aria-labelledby="tokens-tab-daily" className="up-table-scroll">
               <table className="up-table min-w-[520px]">
                 <thead>
                   <tr>
@@ -366,7 +368,7 @@ export default function TokensPage() {
           )}
 
           {view === "project" && (
-            <div id="tokens-panel-project" role="tabpanel" aria-labelledby="tokens-tab-project" className="overflow-x-auto">
+            <div id="tokens-panel-project" role="tabpanel" aria-labelledby="tokens-tab-project" className="up-table-scroll">
               <table className="up-table min-w-[600px]">
                 <thead>
                   <tr>

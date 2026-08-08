@@ -2,6 +2,8 @@
 // search, count), session rows with metadata columns and a one-click
 // resume-command copy button.
 import { useEffect, useMemo, useState } from "react"
+import { IconTerminal } from "../components/icons.jsx"
+import ProviderIcon, { BRAND_CLASS } from "../components/ProviderIcon.jsx"
 import { fmt, getJson } from "../lib/format.js"
 
 const TOOLS = [
@@ -39,9 +41,10 @@ function CopyButton({ command }) {
         })
       }}
       title={command}
-      className="shrink-0 rounded-full border border-oai-gray-200 px-3 py-1.5 text-[12px] text-oai-gray-500 hover:text-oai-black dark:border-oai-gray-800 dark:hover:text-oai-white"
+      className="up-btn shrink-0 text-[12px]"
     >
-      {copied ? "✓ Copied" : ">_ Copy command"}
+      <IconTerminal size={13} />
+      {copied ? "Copied" : "Copy command"}
     </button>
   )
 }
@@ -100,21 +103,21 @@ export default function SessionsPage() {
   if (err) return <div className="p-8 text-oai-gray-500">load failed: {String(err.message ?? err)}</div>
 
   return (
-    <div className="px-2">
+    <div className="mx-auto max-w-page px-2">
       <h1 className="font-oai text-hero">Sessions</h1>
       <p className="mt-1 text-[15px] text-oai-gray-500">
         Browse your local Claude Code and Codex sessions and copy a resume command in one click.
       </p>
 
       <div className="mt-5 flex flex-wrap items-center gap-3">
-        <div className="flex rounded-full border border-oai-gray-200 p-0.5 dark:border-oai-gray-800">
+        <div className="up-seg">
           {TOOLS.map(([key, label]) => (
             <button key={key} onClick={() => setTool(key)} className={`up-pill${tool === key ? " active" : ""}`}>
               {label}
             </button>
           ))}
         </div>
-        <div className="flex rounded-full border border-oai-gray-200 p-0.5 dark:border-oai-gray-800">
+        <div className="up-seg">
           {AGES.map(([key, label]) => (
             <button key={key} onClick={() => setAge(key)} className={`up-pill${age === key ? " active" : ""}`}>
               {label}
@@ -125,7 +128,7 @@ export default function SessionsPage() {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search title, project, model…"
-          className="w-64 rounded-full border border-oai-gray-200 bg-transparent px-4 py-1.5 text-[13px] outline-none placeholder:text-oai-gray-400 focus:border-oai-gray-400 dark:border-oai-gray-800"
+          className="up-input w-64"
         />
         <span className="ml-auto text-[12px] text-oai-gray-400">
           {sessions ? `${filtered.length} of ${sessions.length}` : "loading…"}
@@ -139,9 +142,10 @@ export default function SessionsPage() {
             key={`${s.tool}:${s.id}`}
             className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-oai-gray-100 py-3.5 last:border-0 dark:border-oai-gray-800/60"
           >
-            <span
-              className={`h-2.5 w-2.5 shrink-0 rounded-full ${s.tool === "codex" ? "bg-provider-codex" : "bg-provider-claude"}`}
-              title={s.tool}
+            <ProviderIcon
+              id={s.tool === "codex" ? "codex" : "claude"}
+              size={20}
+              className={BRAND_CLASS[s.tool === "codex" ? "codex" : "claude"]}
             />
             {/* basis forces the stats+copy group onto its own row below ~420px */}
             <div className="min-w-0 flex-1 basis-[220px]">
@@ -149,7 +153,7 @@ export default function SessionsPage() {
                 <span className="truncate text-[14px] font-medium">{s.title}</span>
                 {s.device_id && s.device_id !== selfDevice && (
                   <span
-                    className="shrink-0 rounded-full bg-oai-gray-100 px-2 py-0.5 text-[10px] text-oai-gray-500 dark:bg-oai-gray-800"
+                    className="shrink-0 rounded-full border border-oai-gray-200 px-2 py-px text-[10px] text-oai-gray-400 dark:border-oai-gray-700"
                     title={`此会话在 ${s.device_id} 上,resume 命令需在那台机器执行`}
                   >
                     {s.device_id}

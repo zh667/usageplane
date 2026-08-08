@@ -94,6 +94,13 @@ export const IconRefresh = (p) => (
   </Icon>
 )
 
+export const IconTerminal = (p) => (
+  <Icon {...p}>
+    <path d="m4 17 6-6-6-6" />
+    <path d="M12 19h8" />
+  </Icon>
+)
+
 export const IconPalette = (p) => (
   <Icon {...p}>
     <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" />
