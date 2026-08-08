@@ -403,3 +403,26 @@ test("skills write endpoints reject non-local and cross-site requests", async ()
     server.close()
   }
 })
+
+test("origin must match the request authority exactly: null and other loopback ports rejected", async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "usageplane-origin-"))
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "usageplane-origin-data-"))
+  fs.writeFileSync(path.join(dir, "usageplane.yaml"), "device: dev-a\n")
+  const server = createServer(dir, home)
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+  const { port } = server.address() as AddressInfo
+  const post = (origin?: string) =>
+    fetch(`http://127.0.0.1:${port}/api/skills/refresh`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...(origin === undefined ? {} : { origin }) },
+    })
+  try {
+    assert.equal((await post("null")).status, 403, "opaque origin rejected")
+    assert.equal((await post("http://localhost:9999")).status, 403, "other loopback port rejected")
+    assert.equal((await post(`http://localhost:${port}`)).status, 403, "hostname must match too, not just be loopback")
+    assert.equal((await post(`http://127.0.0.1:${port}`)).status, 200, "exact authority passes")
+    assert.equal((await post(undefined)).status, 200, "no origin (non-browser client) passes")
+  } finally {
+    server.close()
+  }
+})

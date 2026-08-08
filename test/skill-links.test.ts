@@ -138,3 +138,17 @@ test("same-path replacement: a user link at our registered path is refused", asy
   assert.match(r.message, /no longer points/)
   assert.ok(fs.lstatSync(target).isSymbolicLink(), "user's replacement link survives")
 })
+
+test("registry write failure rolls the fresh link back (no stranded foreign links)", async () => {
+  const home = makeEnv()
+  writeSkill(home, ".claude", "atomic", "atomic")
+  // Make the registry path unwritable: a DIRECTORY at the file's path makes
+  // the atomic rename fail, exercising the rollback branch.
+  const regPath = path.join(process.env.USAGEPLANE_HOME!, "skill-links.json")
+  fs.mkdirSync(regPath, { recursive: true })
+
+  const r = await linkSkill(KEY("atomic"), "codex", home)
+  assert.equal(r.ok, false)
+  assert.match(r.message, /rolled back/)
+  assert.ok(!fs.existsSync(path.join(home, ".codex", "skills", "atomic")), "junction rolled back")
+})

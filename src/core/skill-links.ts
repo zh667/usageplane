@@ -36,8 +36,17 @@ function readRegistry(): LinkRegistry {
 }
 
 function writeRegistry(reg: LinkRegistry): void {
-  fs.mkdirSync(path.dirname(registryPath()), { recursive: true })
-  fs.writeFileSync(registryPath(), JSON.stringify(reg, null, 2))
+  // Atomic replace (tmp + rename): a crash mid-write can never leave a
+  // truncated registry that would orphan links as "foreign".
+  const file = registryPath()
+  fs.mkdirSync(path.dirname(file), { recursive: true })
+  const tmp = `${file}.tmp-${process.pid}`
+  try {
+    fs.writeFileSync(tmp, JSON.stringify(reg, null, 2))
+    fs.renameSync(tmp, file)
+  } finally {
+    fs.rmSync(tmp, { force: true })
+  }
 }
 
 function pathStrictlyWithin(parent: string, child: string): boolean {
@@ -106,9 +115,15 @@ export async function linkSkill(key: string, agent: string, home = os.homedir())
   // Junctions work without admin rights on Windows; the type is ignored on
   // other platforms, where a plain dir symlink is created.
   fs.symlinkSync(source, target, "junction")
-  const reg = readRegistry()
-  reg.links.push({ target, source, created_at: new Date().toISOString() })
-  writeRegistry(reg)
+  try {
+    const reg = readRegistry()
+    reg.links.push({ target, source, created_at: new Date().toISOString() })
+    writeRegistry(reg)
+  } catch (err) {
+    // A link we can't record would be stranded as "foreign" — roll it back.
+    fs.rmSync(target, { recursive: true, force: true })
+    return { ok: false, message: `failed to record link — rolled back (${err instanceof Error ? err.message : err})` }
+  }
   return { ok: true, message: `linked for ${agent}` }
 }
 
@@ -136,11 +151,28 @@ export async function unlinkSkill(key: string, agent: string, home = os.homedir(
   if (canonical(target) !== reg.links[idx].source) {
     return { ok: false, message: "link no longer points where we created it — remove it manually if intended" }
   }
-  // rm does not follow symlinks — with isLink verified above this removes the
-  // link/junction itself, never the linked skill's contents (upstream removePath).
-  fs.rmSync(target, { recursive: true, force: true })
+  // Registry first: if the removal can't be recorded, nothing changes on
+  // disk. Only then delete the link; a delete failure restores the record.
+  const removed = reg.links[idx]
   reg.links.splice(idx, 1)
-  writeRegistry(reg)
+  try {
+    writeRegistry(reg)
+  } catch (err) {
+    return { ok: false, message: `failed to update registry — link left in place (${err instanceof Error ? err.message : err})` }
+  }
+  try {
+    // rm does not follow symlinks — with isLink verified above this removes the
+    // link/junction itself, never the linked skill's contents (upstream removePath).
+    fs.rmSync(target, { recursive: true, force: true })
+  } catch (err) {
+    reg.links.splice(idx, 0, removed)
+    try {
+      writeRegistry(reg)
+    } catch {
+      /* best effort — the link is still present and still ours */
+    }
+    return { ok: false, message: `failed to remove link (${err instanceof Error ? err.message : err})` }
+  }
   return { ok: true, message: `removed ${agent} link` }
 }
 

@@ -33,15 +33,15 @@ const LOCAL_HOSTNAMES = new Set(["127.0.0.1", "localhost", "[::1]", "::1"])
  *  - a JSON content type (plain cross-site forms cannot produce one)
  */
 function rejectNonLocalWrite(req: http.IncomingMessage): string | null {
-  const host = String(req.headers.host ?? "").replace(/:\d+$/, "")
+  const hostHeader = String(req.headers.host ?? "")
+  const host = hostHeader.replace(/:\d+$/, "")
   if (!LOCAL_HOSTNAMES.has(host)) return "writes are only accepted from localhost"
   const origin = req.headers.origin
-  if (typeof origin === "string" && origin !== "" && origin !== "null") {
-    try {
-      if (!LOCAL_HOSTNAMES.has(new URL(origin).hostname)) return "cross-origin write rejected"
-    } catch {
-      return "cross-origin write rejected"
-    }
+  if (typeof origin === "string" && origin !== "") {
+    // STRICT same-origin: scheme+host+port must equal this request's own
+    // authority. "null" (opaque/sandboxed contexts) is rejected too — being
+    // loopback-adjacent is not the same as being our page.
+    if (origin.toLowerCase() !== `http://${hostHeader.toLowerCase()}`) return "cross-origin write rejected"
   }
   const site = req.headers["sec-fetch-site"]
   if (typeof site === "string" && site !== "" && !["same-origin", "same-site", "none"].includes(site)) {
