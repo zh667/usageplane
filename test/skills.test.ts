@@ -43,7 +43,7 @@ test("missing skills dirs yield empty list", async () => {
   assert.deepEqual(await listSkills(makeHome()), [])
 })
 
-test("symlinked skill dirs are discovered (Windows junctions report as symlinks)", async () => {
+test("symlinked skill dirs are discovered (Windows junctions report as symlinks)", async (t) => {
   const home = makeHome()
   // Real skill lives outside the skills tree; the skills dir only holds a link.
   const real = path.join(home, "elsewhere", "linked-skill")
@@ -51,7 +51,14 @@ test("symlinked skill dirs are discovered (Windows junctions report as symlinks)
   fs.writeFileSync(path.join(real, "SKILL.md"), "---\nname: linked-skill\ndescription: via link\n---\n")
   const codexSkills = path.join(home, ".codex", "skills")
   fs.mkdirSync(codexSkills, { recursive: true })
-  fs.symlinkSync(real, path.join(codexSkills, "linked-skill"), "dir")
+  try {
+    fs.symlinkSync(real, path.join(codexSkills, "linked-skill"), "dir")
+  } catch (err) {
+    // Windows denies symlink creation to non-admin shells (EPERM). Real
+    // junctions were field-verified; skip only the fixture creation.
+    if ((err as NodeJS.ErrnoException).code === "EPERM") return t.skip("symlink creation not permitted here")
+    throw err
+  }
 
   const skills = await listSkills(home)
   const linked = skills.find((s) => s.name === "linked-skill")

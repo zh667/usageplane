@@ -47,7 +47,10 @@ export async function runPull(urlArg?: string): Promise<void> {
   try {
     const n = store.upsertUsage(payload.records)
     const nSessions = Array.isArray(payload.sessions) ? store.upsertSessionRows(payload.sessions) : 0
-    const nState = Array.isArray(payload.state) ? store.upsertDeviceState(payload.state) : 0
+    // The hub is authoritative for OTHER devices' state — replace, don't
+    // merge, so keys those devices deleted don't linger here as stale rows.
+    // Our own device's state stays local-authoritative (next sync rewrites it).
+    const nState = Array.isArray(payload.state) ? store.replaceOtherDevicesState(cfg.device, payload.state) : 0
     console.log(
       `pulled ${n} buckets + ${nSessions} session entries + ${nState} device-state rows — local database now holds ${store.countRecords()} records`,
     )

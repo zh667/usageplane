@@ -207,3 +207,51 @@ test("store aggregation queries group correctly", () => {
   assert.equal(store.totalsByDay(1).length, 1, "LIMIT applies")
   store.close()
 })
+
+test("device_state snapshot semantics: declared push replaces the group, deletions propagate", async () => {
+  const dir = seededDir()
+  fs.writeFileSync(path.join(dir, "usageplane.yaml"), "device: hub-dev\nhub:\n  token: s3cret\n")
+  await withServer(dir, async (base) => {
+    const push = (state: unknown[], declare: boolean) =>
+      fetch(`${base}/api/ingest`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: "Bearer s3cret" },
+        body: JSON.stringify({
+          records: [],
+          state,
+          ...(declare ? { state_device: "windows-pc", state_kinds: ["skill", "limit"] } : {}),
+        }),
+      })
+
+    // First push: two skills + one limit, plus an unrelated device's row that
+    // must survive windows-pc's replacements.
+    const other = { device_id: "mac-mini", kind: "skill", key: "user::keep", payload: "{}" }
+    await push([other], false)
+    const first = await push(
+      [
+        { device_id: "windows-pc", kind: "skill", key: "user::old-a", payload: "{}" },
+        { device_id: "windows-pc", kind: "skill", key: "user::old-b", payload: "{}" },
+        { device_id: "windows-pc", kind: "limit", key: "codex", payload: "{}" },
+      ],
+      true,
+    )
+    assert.equal((await first.json()).state_upserted, 3)
+
+    // Second push: old-a deleted on the device, only old-b remains; limits now empty.
+    await push([{ device_id: "windows-pc", kind: "skill", key: "user::old-b", payload: "{}" }], true)
+
+    const exported = await fetch(`${base}/api/export`, {
+      headers: { authorization: "Bearer s3cret" },
+    }).then((r) => r.json())
+    const win = exported.state.filter((r: { device_id: string }) => r.device_id === "windows-pc")
+    assert.deepEqual(
+      win.map((r: { kind: string; key: string }) => `${r.kind}:${r.key}`),
+      ["skill:user::old-b"],
+      "deleted skill and emptied limit group are gone",
+    )
+    assert.ok(
+      exported.state.some((r: { device_id: string }) => r.device_id === "mac-mini"),
+      "other devices' state untouched",
+    )
+  })
+})

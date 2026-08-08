@@ -69,6 +69,10 @@ export interface DeviceStateRow {
   updated_at?: string
 }
 
+/** State kinds a device fully re-computes each sync. Push declares them so the
+ *  hub can replace whole groups — even ones that became empty. */
+export const MANAGED_STATE_KINDS = ["skill", "limit"] as const
+
 export interface SessionRow {
   device_id: string
   tool: string
@@ -370,6 +374,21 @@ export class Store {
   }
 
   /** Replace a device's rows of one kind (removes items that disappeared locally). */
+  /**
+   * Make the hub authoritative for OTHER devices' state: wipe every row not
+   * belonging to selfDeviceId and insert the given rows (self rows filtered
+   * out — local state is locally authoritative). Snapshot semantics: without
+   * the wipe, keys deleted on the source device linger here forever.
+   */
+  replaceOtherDevicesState(selfDeviceId: string, rows: DeviceStateRow[]): number {
+    const wipe = this.db.prepare("DELETE FROM device_state WHERE device_id != ?")
+    const run = this.db.transaction(() => {
+      wipe.run(selfDeviceId)
+      return this.upsertDeviceState(rows.filter((r) => r.device_id !== selfDeviceId))
+    })
+    return run()
+  }
+
   replaceDeviceState(deviceId: string, kind: string, rows: Omit<DeviceStateRow, "device_id" | "kind">[]): number {
     const wipe = this.db.prepare("DELETE FROM device_state WHERE device_id = ? AND kind = ?")
     const run = this.db.transaction(() => {

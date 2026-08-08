@@ -372,6 +372,8 @@ export function createServer(dir = dataDir()): http.Server {
           records?: UsageRecord[]
           sessions?: SessionRow[]
           state?: DeviceStateRow[]
+          state_device?: string
+          state_kinds?: string[]
         }
         if (!Array.isArray(payload.records)) {
           json(res, 400, { error: "body must be {records: UsageRecord[]}" })
@@ -383,7 +385,22 @@ export function createServer(dir = dataDir()): http.Server {
           const sessionsUpserted = Array.isArray(payload.sessions)
             ? store.upsertSessionRows(payload.sessions)
             : 0
-          const stateUpserted = Array.isArray(payload.state) ? store.upsertDeviceState(payload.state) : 0
+          // Snapshot semantics when declared: replace each announced
+          // (device, kind) group wholesale so deletions propagate. Legacy
+          // pushers without the declaration keep plain upsert.
+          let stateUpserted = 0
+          const state = Array.isArray(payload.state) ? payload.state : []
+          if (typeof payload.state_device === "string" && Array.isArray(payload.state_kinds)) {
+            for (const kind of payload.state_kinds) {
+              stateUpserted += store.replaceDeviceState(
+                payload.state_device,
+                String(kind),
+                state.filter((r) => r.device_id === payload.state_device && r.kind === kind),
+              )
+            }
+          } else if (state.length > 0) {
+            stateUpserted = store.upsertDeviceState(state)
+          }
           json(res, 200, {
             upserted,
             sessions_upserted: sessionsUpserted,

@@ -85,3 +85,19 @@ test("negative token counts are rejected", () => {
   assert.throws(() => store.upsertUsage([record({ input_tokens: -1 })]), /non-negative/)
   store.close()
 })
+
+test("replaceOtherDevicesState: hub rows replace other devices' state, own device untouched", () => {
+  const store = new Store(":memory:")
+  store.upsertDeviceState([
+    { device_id: "self", kind: "skill", key: "user::mine", payload: "{}" },
+    { device_id: "remote", kind: "skill", key: "user::stale", payload: "{}" },
+  ])
+  store.replaceOtherDevicesState("self", [
+    { device_id: "remote", kind: "skill", key: "user::fresh", payload: "{}" },
+    // Own-device rows in the payload are ignored — local state is authoritative.
+    { device_id: "self", kind: "skill", key: "user::hub-copy", payload: "{}" },
+  ])
+  const rows = store.deviceState("skill").map((r) => `${r.device_id}:${r.key}`).sort()
+  assert.deepEqual(rows, ["remote:user::fresh", "self:user::mine"])
+  store.close()
+})

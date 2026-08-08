@@ -1,6 +1,6 @@
 import { loadConfig, resolveHubToken } from "../core/config.js"
 import { dataDir, dbPath } from "../core/paths.js"
-import { Store } from "../core/store.js"
+import { MANAGED_STATE_KINDS, Store } from "../core/store.js"
 
 /**
  * Push every local usage record to the aggregation hub's /api/ingest.
@@ -31,7 +31,9 @@ export async function runPush(urlArg?: string, opts: { quiet?: boolean } = {}): 
   try {
     records = store.allRecords()
     sessions = store.allSessionRows()
-    state = store.deviceState()
+    // Only OUR device's state goes up — pushing pulled copies of other
+    // devices' state would resurrect rows they have since deleted.
+    state = store.deviceState().filter((r) => r.device_id === cfg.device)
   } finally {
     store.close()
   }
@@ -44,7 +46,10 @@ export async function runPush(urlArg?: string, opts: { quiet?: boolean } = {}): 
   const res = await fetch(endpoint, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify({ records, sessions, state }),
+    // state_device + state_kinds declare snapshot-replacement semantics: the
+    // hub wipes those (device, kind) groups and installs exactly these rows,
+    // so keys deleted here disappear there too (including now-empty kinds).
+    body: JSON.stringify({ records, sessions, state, state_device: cfg.device, state_kinds: MANAGED_STATE_KINDS }),
   })
   if (!res.ok) {
     const text = await res.text().catch(() => "")
