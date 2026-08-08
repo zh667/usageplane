@@ -253,10 +253,12 @@ export default function SkillsPage() {
           )}
           {browse?.error && <div className="mt-3 rounded-lg bg-amber-500/10 px-3 py-2 text-[12px] text-amber-600">{browse.error}</div>}
           {browse === null && <div className="p-8 text-oai-gray-400">loading…</div>}
-          {/* Equal-height card grid: 3 cols wide, 2 medium, 1 narrow. */}
-          <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {/* Equal-height card grid: 3 cols wide, 2 medium, 1 narrow. The
+              explicit grid-cols-1 base keeps long content from widening the
+              implicit track on mobile (upstream does the same). */}
+          <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {browseFiltered.map((s) => (
-              <div key={s.key} className="up-card flex h-full flex-col p-4">
+              <div key={s.key} className="up-card flex h-full min-w-0 flex-col p-4">
                 <div className="flex items-start justify-between gap-2">
                   <span className="min-w-0 truncate text-[14px] font-semibold">{s.name}</span>
                   <a

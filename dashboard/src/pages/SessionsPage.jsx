@@ -44,7 +44,8 @@ function CopyButton({ command }) {
       className="up-btn shrink-0 text-[12px]"
     >
       <IconTerminal size={13} />
-      {copied ? "Copied" : "Copy command"}
+      <span className="hidden sm:inline">{copied ? "Copied" : "Copy command"}</span>
+      <span className="sm:hidden">{copied ? "✓" : "Copy"}</span>
     </button>
   )
 }
@@ -164,14 +165,16 @@ export default function SessionsPage() {
                 {[s.project || "—", s.model, fmtDate(s.ended_at), fmtDuration(s.duration_ms)].join(" · ")}
               </div>
             </div>
-            <div className="ml-auto flex shrink-0 items-center gap-5">
-              <div className="flex gap-5 text-right">
+            {/* Mobile degrade (upstream pattern): Turns/Edits and the button
+                text disappear below sm so the group can never outgrow the row. */}
+            <div className="ml-auto flex shrink-0 items-center gap-3 sm:gap-5">
+              <div className="flex gap-3 text-right sm:gap-5">
                 {[
-                  [fmt(s.total_tokens), "Tokens"],
-                  [String(s.turns), "Turns"],
-                  [String(s.edits), "Edits"],
-                ].map(([v, l]) => (
-                  <div key={l} className="w-14">
+                  [fmt(s.total_tokens), "Tokens", ""],
+                  [String(s.turns), "Turns", "hidden sm:block"],
+                  [String(s.edits), "Edits", "hidden sm:block"],
+                ].map(([v, l, cls]) => (
+                  <div key={l} className={`w-14 ${cls}`}>
                     <div className="text-[13px] font-semibold">{v}</div>
                     <div className="text-[11px] text-oai-gray-400">{l}</div>
                   </div>
