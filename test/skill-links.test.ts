@@ -60,7 +60,7 @@ test("unlink refuses real directories, foreign links, and the last remaining ins
   // A link the USER made (not in our registry) must not be deleted.
   const src = writeSkill(home, ".claude", "hand", "hand")
   const handLink = path.join(home, ".codex", "skills", "hand")
-  fs.symlinkSync(src, handLink, "dir")
+  fs.symlinkSync(src, handLink, "junction")
   const foreign = await unlinkSkill(KEY("hand"), "codex", home)
   assert.equal(foreign.ok, false)
   assert.match(foreign.message, /not created by usageplane/)
@@ -97,4 +97,44 @@ test("link refuses to overwrite an existing target path", async () => {
   const r = await linkSkill(KEY("clash"), "codex", home)
   assert.equal(r.ok, false)
   assert.match(r.message, /already exists/)
+})
+
+test("no link chains: every link resolves to the real dir; middle removal strands nothing", async () => {
+  const home = makeEnv()
+  const real = writeSkill(home, ".codex", "chain", "chain")
+
+  // claude picks the codex real dir; agents would naively pick the claude
+  // LINK (agent scan order) — canonicalization must flatten it to the real dir.
+  assert.equal((await linkSkill(KEY("chain"), "claude-code", home)).ok, true)
+  assert.equal((await linkSkill(KEY("chain"), "agents", home)).ok, true)
+
+  const agentsLink = path.join(home, ".agents", "skills", "chain")
+  assert.equal(fs.realpathSync(agentsLink), fs.realpathSync(real), "agents links straight to the real dir")
+
+  // Removing the middle hop must leave the outer install fully functional.
+  assert.equal((await unlinkSkill(KEY("chain"), "claude-code", home)).ok, true)
+  const after = await listSkills(home)
+  assert.deepEqual(after.find((s) => s.name === "chain")?.agents.sort(), ["agents", "codex"])
+  assert.equal((await unlinkSkill(KEY("chain"), "agents", home)).ok, true)
+  assert.ok(fs.existsSync(real), "real dir untouched throughout")
+})
+
+test("same-path replacement: a user link at our registered path is refused", async () => {
+  const home = makeEnv()
+  writeSkill(home, ".claude", "swap", "swap")
+  assert.equal((await linkSkill(KEY("swap"), "codex", home)).ok, true)
+
+  // User deletes our link and puts THEIR OWN link at the same path,
+  // pointing at a different copy of the skill.
+  const target = path.join(home, ".codex", "skills", "swap")
+  fs.rmSync(target, { recursive: true, force: true })
+  const copy = path.join(home, "copies", "swap")
+  fs.mkdirSync(copy, { recursive: true })
+  fs.writeFileSync(path.join(copy, "SKILL.md"), "---\nname: swap\ndescription: copy\n---\n")
+  fs.symlinkSync(copy, target, "junction")
+
+  const r = await unlinkSkill(KEY("swap"), "codex", home)
+  assert.equal(r.ok, false)
+  assert.match(r.message, /no longer points/)
+  assert.ok(fs.lstatSync(target).isSymbolicLink(), "user's replacement link survives")
 })

@@ -53,6 +53,15 @@ function isLink(p: string): boolean {
   }
 }
 
+/** Fully-resolved real path, or null when it can't be resolved (dangling link). */
+function canonical(p: string): string | null {
+  try {
+    return fs.realpathSync(p)
+  } catch {
+    return null
+  }
+}
+
 export interface LinkResult {
   ok: boolean
   message: string
@@ -75,8 +84,13 @@ export async function linkSkill(key: string, agent: string, home = os.homedir())
   if (!("name" in found)) return found
   if (found.paths?.[agent]) return { ok: true, message: "already installed — nothing to do" }
 
-  const source = Object.values(found.paths ?? {})[0]
-  if (!source) return { ok: false, message: "no local install to link from" }
+  const anyInstall = Object.values(found.paths ?? {})[0]
+  if (!anyInstall) return { ok: false, message: "no local install to link from" }
+  // The picked install may itself be one of our links. Always link to the
+  // RESOLVED real directory — link chains (A→B→real) break when the middle
+  // link is removed, stranding the outer one.
+  const source = canonical(anyInstall)
+  if (!source) return { ok: false, message: "existing install does not resolve — fix or remove it first" }
 
   // Target name comes from the scanned source dir's basename — never from
   // client input — and must resolve strictly inside the agent's skills root.
@@ -89,9 +103,9 @@ export async function linkSkill(key: string, agent: string, home = os.homedir())
   }
 
   fs.mkdirSync(root, { recursive: true })
-  // Junctions work without admin rights on Windows; symlinkSync falls back to
-  // copying nothing — a failure here surfaces to the caller as-is.
-  fs.symlinkSync(source, target, process.platform === "win32" ? "junction" : "dir")
+  // Junctions work without admin rights on Windows; the type is ignored on
+  // other platforms, where a plain dir symlink is created.
+  fs.symlinkSync(source, target, "junction")
   const reg = readRegistry()
   reg.links.push({ target, source, created_at: new Date().toISOString() })
   writeRegistry(reg)
@@ -116,10 +130,38 @@ export async function unlinkSkill(key: string, agent: string, home = os.homedir(
   if (idx === -1) {
     return { ok: false, message: "link was not created by usageplane — remove it manually if intended" }
   }
+  // A registry hit on the PATH alone is not ownership: the user may have
+  // replaced our link with their own at the same path. Only delete when the
+  // link still resolves to the canonical source we recorded at create time.
+  if (canonical(target) !== reg.links[idx].source) {
+    return { ok: false, message: "link no longer points where we created it — remove it manually if intended" }
+  }
   // rm does not follow symlinks — with isLink verified above this removes the
   // link/junction itself, never the linked skill's contents (upstream removePath).
   fs.rmSync(target, { recursive: true, force: true })
   reg.links.splice(idx, 1)
   writeRegistry(reg)
   return { ok: true, message: `removed ${agent} link` }
+}
+
+export type InstallState = "real" | "owned-link" | "foreign-link"
+
+/**
+ * Classify each local install so the UI only offers removal where unlink
+ * would actually succeed: our registry-recorded links (still pointing at the
+ * recorded source) are "owned-link"; anything else is hands-off.
+ */
+export function classifyInstalls(paths: Record<string, string> | undefined): Record<string, InstallState> {
+  const out: Record<string, InstallState> = {}
+  if (!paths) return out
+  const reg = readRegistry()
+  for (const [agent, p] of Object.entries(paths)) {
+    if (!isLink(p)) {
+      out[agent] = "real"
+      continue
+    }
+    const rec = reg.links.find((l) => path.resolve(l.target) === path.resolve(p))
+    out[agent] = rec && canonical(p) === rec.source ? "owned-link" : "foreign-link"
+  }
+  return out
 }

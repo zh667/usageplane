@@ -52,7 +52,7 @@ test("symlinked skill dirs are discovered (Windows junctions report as symlinks)
   const codexSkills = path.join(home, ".codex", "skills")
   fs.mkdirSync(codexSkills, { recursive: true })
   try {
-    fs.symlinkSync(real, path.join(codexSkills, "linked-skill"), "dir")
+    fs.symlinkSync(real, path.join(codexSkills, "linked-skill"), "junction")
   } catch (err) {
     // Windows denies symlink creation to non-admin shells (EPERM). Real
     // junctions were field-verified; skip only the fixture creation.

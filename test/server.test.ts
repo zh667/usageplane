@@ -1,6 +1,7 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import fs from "node:fs"
+import http from "node:http"
 import os from "node:os"
 import path from "node:path"
 import type { AddressInfo } from "node:net"
@@ -346,10 +347,59 @@ test("skills management API: detail, toggle round-trip, refresh updates device_s
     })
     assert.equal(bad.status, 409, "unknown agent rejected")
 
-    assert.equal((await fetch(`${base}/api/skills/refresh`, { method: "POST" })).status, 200)
+    assert.equal(
+      (await fetch(`${base}/api/skills/refresh`, { method: "POST", headers: { "content-type": "application/json" } }))
+        .status,
+      200,
+    )
     assert.equal((await fetch(`${base}/api/skills/detail?key=user::nope`)).status, 404)
   } finally {
     server.close()
     delete process.env.USAGEPLANE_HOME
+  }
+})
+
+test("skills write endpoints reject non-local and cross-site requests", async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "usageplane-csrf-"))
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "usageplane-csrf-data-"))
+  fs.writeFileSync(path.join(dir, "usageplane.yaml"), "device: dev-a\n")
+  const server = createServer(dir, home)
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve))
+  const { port } = server.address() as AddressInfo
+  const base = `http://127.0.0.1:${port}`
+  const post = (headers: Record<string, string>) =>
+    fetch(`${base}/api/skills/refresh`, { method: "POST", headers })
+  try {
+    // DNS rebinding: request reaches 127.0.0.1 but carries the attacker's
+    // Host. fetch() forbids overriding Host, so use a raw http request.
+    const rebound = await new Promise<number>((resolve, reject) => {
+      const r = http.request(
+        { host: "127.0.0.1", port, path: "/api/skills/refresh", method: "POST",
+          headers: { "content-type": "application/json", host: "evil.example.com" } },
+        (resp) => { resp.resume(); resolve(resp.statusCode ?? 0) },
+      )
+      r.on("error", reject)
+      r.end()
+    })
+    assert.equal(rebound, 403)
+    // Cross-origin browser write.
+    assert.equal(
+      (await post({ "content-type": "application/json", origin: "http://evil.example.com" })).status,
+      403,
+    )
+    assert.equal(
+      (await post({ "content-type": "application/json", "sec-fetch-site": "cross-site" })).status,
+      403,
+    )
+    // Plain form content type (what a cross-site form can actually produce).
+    assert.equal((await post({ "content-type": "application/x-www-form-urlencoded" })).status, 403)
+    // Legitimate local request passes.
+    assert.equal((await post({ "content-type": "application/json" })).status, 200)
+    assert.equal(
+      (await post({ "content-type": "application/json", origin: `http://127.0.0.1:${port}` })).status,
+      200,
+    )
+  } finally {
+    server.close()
   }
 })

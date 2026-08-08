@@ -15,12 +15,43 @@ import { allLimits } from "../core/limits.js"
 import { computeRowCost } from "../core/pricing.js"
 import { listSessionsCached } from "../core/sessions.js"
 import { listSkills, skillKey, skillStateRows } from "../core/skills.js"
-import { linkSkill, unlinkSkill } from "../core/skill-links.js"
+import { classifyInstalls, linkSkill, unlinkSkill } from "../core/skill-links.js"
 import { runPush } from "../commands/push.js"
 import { getAdapter } from "../relays/index.js"
 import { DASHBOARD_HTML } from "./dashboard-html.js"
 
 const MAX_INGEST_BYTES = 32 * 1024 * 1024
+
+const LOCAL_HOSTNAMES = new Set(["127.0.0.1", "localhost", "[::1]", "::1"])
+
+/**
+ * Guard for unauthenticated endpoints that WRITE to the local filesystem.
+ * Loopback binding alone doesn't stop DNS rebinding or a browser page firing
+ * cross-site requests at local ports, so require all of:
+ *  - a loopback Host header (rebinding leaves the attacker's hostname here)
+ *  - a loopback Origin / non-cross-site Sec-Fetch-Site when the browser sends them
+ *  - a JSON content type (plain cross-site forms cannot produce one)
+ */
+function rejectNonLocalWrite(req: http.IncomingMessage): string | null {
+  const host = String(req.headers.host ?? "").replace(/:\d+$/, "")
+  if (!LOCAL_HOSTNAMES.has(host)) return "writes are only accepted from localhost"
+  const origin = req.headers.origin
+  if (typeof origin === "string" && origin !== "" && origin !== "null") {
+    try {
+      if (!LOCAL_HOSTNAMES.has(new URL(origin).hostname)) return "cross-origin write rejected"
+    } catch {
+      return "cross-origin write rejected"
+    }
+  }
+  const site = req.headers["sec-fetch-site"]
+  if (typeof site === "string" && site !== "" && !["same-origin", "same-site", "none"].includes(site)) {
+    return "cross-site write rejected"
+  }
+  if (!String(req.headers["content-type"] ?? "").includes("application/json")) {
+    return "content-type must be application/json"
+  }
+  return null
+}
 
 const VERSION = (() => {
   try {
@@ -319,10 +350,25 @@ export function createServer(dir = dataDir(), homeDir = os.homedir()): http.Serv
           json(res, 404, { error: "not installed on this device" })
           return
         }
-        json(res, 200, { ...skill, manageable: skill.scope === "user" })
+        // Per-agent ownership so the UI only offers removal where unlink
+        // would succeed: owned links with at least one other install left.
+        const states = classifyInstalls(skill.paths)
+        const installCount = Object.keys(skill.paths ?? {}).length
+        const installStates = Object.fromEntries(
+          Object.entries(states).map(([agent, state]) => [
+            agent,
+            { state, removable: state === "owned-link" && installCount > 1 },
+          ]),
+        )
+        json(res, 200, { ...skill, manageable: skill.scope === "user", install_states: installStates })
         return
       }
       if (url.pathname === "/api/skills/toggle" && req.method === "POST") {
+        const guard = rejectNonLocalWrite(req)
+        if (guard) {
+          json(res, 403, { error: guard })
+          return
+        }
         const body = JSON.parse(await readBody(req, 64 * 1024)) as {
           key?: string
           agent?: string
@@ -340,6 +386,11 @@ export function createServer(dir = dataDir(), homeDir = os.homedir()): http.Serv
         return
       }
       if (url.pathname === "/api/skills/refresh" && req.method === "POST") {
+        const guard = rejectNonLocalWrite(req)
+        if (guard) {
+          json(res, 403, { error: guard })
+          return
+        }
         // Rescan only — never touches skill files.
         await rescanSkillState()
         json(res, 200, { ok: true })

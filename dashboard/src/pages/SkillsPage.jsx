@@ -262,23 +262,42 @@ export default function SkillsPage() {
                 <div className="up-nav-label mt-5 px-0">本机 AGENT 安装管理</div>
                 {MANAGED_AGENTS.map((a) => {
                   const installed = Boolean(localInfo.paths?.[a])
+                  const st = localInfo.install_states?.[a]
+                  // Removal is only offered where unlink would succeed: our
+                  // own link with at least one other install remaining.
+                  const stateLabel = !installed
+                    ? null
+                    : st?.state === "real"
+                      ? "真实目录"
+                      : st?.state === "foreign-link"
+                        ? "手工链接"
+                        : st?.removable
+                          ? "已安装"
+                          : "唯一安装"
                   return (
                     <div key={a} className="flex items-center justify-between py-1.5 text-[13px]">
                       <span className="min-w-0 truncate" title={localInfo.paths?.[a] ?? ""}>
                         {AGENT_LABELS[a] ?? a}
-                        {installed && <span className="ml-2 text-[11px] text-oai-gray-400">已安装</span>}
+                        {stateLabel && <span className="ml-2 text-[11px] text-oai-gray-400">{stateLabel}</span>}
                       </span>
-                      <button
-                        onClick={() => toggle(a, !installed)}
-                        disabled={busy}
-                        className={`rounded-full border px-3 py-1 text-[12px] disabled:opacity-50 ${
-                          installed
-                            ? "border-oai-gray-200 text-oai-gray-500 hover:border-red-300 hover:text-red-600 dark:border-oai-gray-700"
-                            : "border-brand-500 text-brand-600 hover:bg-brand-500/10"
-                        }`}
-                      >
-                        {installed ? "移除链接" : "安装"}
-                      </button>
+                      {!installed && (
+                        <button
+                          onClick={() => toggle(a, true)}
+                          disabled={busy}
+                          className="rounded-full border border-brand-500 px-3 py-1 text-[12px] text-brand-600 hover:bg-brand-500/10 disabled:opacity-50"
+                        >
+                          安装
+                        </button>
+                      )}
+                      {installed && st?.removable && (
+                        <button
+                          onClick={() => toggle(a, false)}
+                          disabled={busy}
+                          className="rounded-full border border-oai-gray-200 px-3 py-1 text-[12px] text-oai-gray-500 hover:border-red-300 hover:text-red-600 disabled:opacity-50 dark:border-oai-gray-700"
+                        >
+                          移除链接
+                        </button>
+                      )}
                     </div>
                   )
                 })}

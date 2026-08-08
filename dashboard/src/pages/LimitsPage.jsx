@@ -60,9 +60,11 @@ function Bar({ window: w, mode, warnAt }) {
       <div className="flex items-center gap-3">
         <span className="w-12 shrink-0 text-[12px] text-oai-gray-500">{w.label}</span>
         <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-oai-gray-100 dark:bg-oai-gray-800">
+          {/* Bar width follows the displayed number (% left in left mode);
+              warn colors keep keying off actual usage. */}
           <div
             className={`h-full rounded-full ${hot ? "bg-red-500" : willCap ? "bg-amber-500" : "bg-brand-500"}`}
-            style={{ width: `${used}%` }}
+            style={{ width: `${shown}%` }}
           />
         </div>
         <span className={`w-12 shrink-0 text-right text-[12px] font-semibold ${hot ? "text-red-600" : ""}`}>
