@@ -74,6 +74,7 @@
 - ✅ UI 打磨批次二（2026-08-08）：P0.5 移动端三处残余溢出清零（420px 五页 doc==viewport 实测）；P1-4 Tokens 交互深化——表头七列排序、Custom 日期区间（UTC 日界含端点，`/api/usage?range=custom&from&to`）、来源卡点击展开模型明细（token/占比/估算成本）
 - ✅ UI 打磨批次三（2026-08-08）：Tokens 项目视图——真页签语义（role=tablist/tab）、八列全排序（SortableHeader 组件：真按钮+键盘+aria-sort，日表复用）、成本按 (project,tool,model) 粒度定价后归并、空项目显式 Unknown 行、短名显示全路径 tooltip；验收实测 Σ项目==范围总计精确相等、420px 无溢出；顺带清 P2 无障碍两项（日期输入 aria-label、来源面板列头标注分母口径）
 - ✅ UI 打磨批次四（2026-08-08）：**Skills 管理第一刀**（十条边界全落：详情抽屉本机读 SKILL.md 元数据/远端只显来源；User/Shared 技能按 agent 链接安装（Win junction 免管理员/Unix symlink）；插件缓存严格只读；移除仅删注册表（skill-links.json）内自建链接——真实目录/手工链接/最后一份全部拒绝；目标路径严格限定技能根内且名字只来自磁盘扫描；幂等；成功后重扫+device_state+静默推 hub；Refresh 纯重扫）+ **Limits 增强**（线性节奏预测过窗 10% 后显示、告警阈值 off/70/80/90 红色高亮、Provider 显隐、断连诊断提示）+ Tokens ARIA Tabs 补全（tabpanel/aria-controls/roving tabindex/方向键）。Skills Discover（第三方仓库安装）为第二刀待排
+- ✅ Skills 管理安全修复轮（2026-08-08，审计第二轮五项 P1 全清）：①链式链接根除——创建前 realpath 解析到真实目录，注册表存 canonical source，三 Agent 链回归测试②所有权双重验证——路径命中注册表还须解析目标等于登记源，同路径手工替换链接拒删③本地写端点防护——Host 回环白名单（防 DNS rebinding，raw-http 测试）+ 同源 Origin/Sec-Fetch-Site + 强制 JSON④detail 返回 per-agent `install_states`（real/owned-link/foreign-link + removable），抽屉只对可移除项显示按钮⑤测试夹具统一 junction 类型（Unix 忽略/Windows 免管理员），Windows 防护测试不再 EPERM。另修 Limits 剩余模式进度条宽度跟随显示值
 - 后续 UI 批次（审计待排）：Skills Discover 第二刀；语言统一待 i18n 基建
 - 后备（本批次未排）：项目归属升级 git-root、Cursor/Gemini 采集器
 
