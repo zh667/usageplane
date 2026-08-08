@@ -77,6 +77,7 @@
 - ✅ Skills 管理安全修复轮（2026-08-08，审计第二轮五项 P1 全清）：①链式链接根除——创建前 realpath 解析到真实目录，注册表存 canonical source，三 Agent 链回归测试②所有权双重验证——路径命中注册表还须解析目标等于登记源，同路径手工替换链接拒删③本地写端点防护——Host 回环白名单（防 DNS rebinding，raw-http 测试）+ 同源 Origin/Sec-Fetch-Site + 强制 JSON④detail 返回 per-agent `install_states`（real/owned-link/foreign-link + removable），抽屉只对可移除项显示按钮⑤测试夹具统一 junction 类型（Unix 忽略/Windows 免管理员），Windows 防护测试不再 EPERM。另修 Limits 剩余模式进度条宽度跟随显示值
 - ✅ 加固两项（2026-08-08，审计 P2）：写端点 Origin 严格同源（scheme+host+port 精确等于请求 authority，拒绝 null 与其他回环端口）；链接注册表原子写（tmp+rename）+ 双向回滚（记录失败回滚 junction，删除失败恢复记录）
 - ✅ Skills Discover 第二刀（2026-08-08）：移植 TT discover——tree API（main/master 回退）扫 SKILL.md（每仓上限 200）、并发 4 拉 frontmatter、限流友好报错、指纹化 1h 缓存、上游同款四默认仓；安装=下载到 `~/.usageplane/skills/managed/`（temp+原子 rename、逐路径穿越消毒）后经同一 owned-link 注册表链入 agent（所有权/移除规则与手动完全一致）；卸载只删自建链接+托管副本；install 参数以服务端 discovery 数据为准（不信客户端字段）、写端点全部走本地写防护；真实仓库技能 install→双 agent owned-link→uninstall 零残留实测通过。**Discover 待办**：更新检测（blob-SHA 签名已侦察未实现）、自定义仓库源、安装时选 agent
+- ✅ Discover 审计修复轮（2026-08-08，第三轮三 P1 + 三 P2 全清）：①安装事务化——任一链接失败或 managed.json 写失败回滚全部本次链接+托管副本（冲突/写失败两条回滚测试）②根构建 npm workspaces 化——`npm install` 装 dashboard 依赖、`npm run build` 同时跑 tsc+Vite，fresh clone/升级不再落旧前端③部分仓库失败显式返回 `{partial, errors[]}`、部分结果只缓存 5 分钟（完整 1h）、Browse 横幅列出失败仓且缓存命中也显示④安装 agent 改服务端固定 allowlist（Claude+Codex），请求只带 key，实测客户端指定 agents 被无视⑤发现并发改全局 4（原每仓 4 峰值 16）、安装下载限额 200 文件/单文件 2MB/总 20MB⑥Skills Tabs 补全 WAI-ARIA（方向键+移焦/aria-controls/tabpanel）
 - 后续 UI 批次（审计待排）：语言统一待 i18n 基建
 - 后备（本批次未排）：项目归属升级 git-root、Cursor/Gemini 采集器
 
