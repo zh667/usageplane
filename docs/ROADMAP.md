@@ -72,7 +72,8 @@
 - ✅ 隐私加固（2026-08-08，回应用户隐私拷问）：会话标题带 `title_source` 溯源——content 衍生（用户首句）的标题**永不出设备**（入库前置空），仅 agent 生成的标题参与 hub 同步；`hub.sync_sessions: false` 可整体关闭会话同步
 - ✅ UI 打磨批次一（2026-08-08，响应用户实测审计 P0/P1）：窄屏 56px 顶栏+汉堡+260px 抽屉导航（侧栏不再吃掉小窗口 216px）；页面标题 48/700→34/600；拆掉全站外层大卡（卡套卡模板感），各页独立卡片模块；emoji 图标全部换成统一 Lucide 线性内联 SVG；导航密度对齐上游 13px/32px；窄屏横向溢出修复（热力图/表格卡内滚动）。**审计定性遵循用户方向：不做 TT 外观复刻，保留双设备 hub+中转站资产核心优势，补信息密度与响应式质感**
 - ✅ UI 打磨批次二（2026-08-08）：P0.5 移动端三处残余溢出清零（420px 五页 doc==viewport 实测）；P1-4 Tokens 交互深化——表头七列排序、Custom 日期区间（UTC 日界含端点，`/api/usage?range=custom&from&to`）、来源卡点击展开模型明细（token/占比/估算成本）
-- 后续 UI 批次（审计待排）：Tokens 项目视图；Skills 详情抽屉/刷新/同步安装工作流（TT skills-manager 后端可移植）；Limits 告警/预测/Provider 显隐/诊断；语言统一待 i18n 基建
+- ✅ UI 打磨批次三（2026-08-08）：Tokens 项目视图——真页签语义（role=tablist/tab）、八列全排序（SortableHeader 组件：真按钮+键盘+aria-sort，日表复用）、成本按 (project,tool,model) 粒度定价后归并、空项目显式 Unknown 行、短名显示全路径 tooltip；验收实测 Σ项目==范围总计精确相等、420px 无溢出；顺带清 P2 无障碍两项（日期输入 aria-label、来源面板列头标注分母口径）
+- 后续 UI 批次（审计待排）：Skills 详情抽屉/刷新/同步安装工作流（TT skills-manager 后端可移植）；Limits 告警/预测/Provider 显隐/诊断；语言统一待 i18n 基建
 - 后备（本批次未排）：项目归属升级 git-root、Cursor/Gemini 采集器
 
 ## v0.5 — 中转站侧对齐批次（当前批次，向 All API Hub 靠；用户定 2026-08-08：先于 v0.3 云端）
