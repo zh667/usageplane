@@ -123,6 +123,37 @@ async function fetchWithTimeout(url: string, accept: string, fetchFn: typeof fet
   }
 }
 
+/**
+ * Read a response body with a hard byte ceiling BEFORE it is fully buffered:
+ * reject oversized Content-Length up front, then stream and cancel the moment
+ * the running total crosses the limit. Bodies without a stream (test doubles)
+ * fall back to arrayBuffer + post-check.
+ */
+async function readBodyLimited(res: Response, limit: number, overLimitMessage: string): Promise<Buffer> {
+  const declared = Number(res.headers?.get?.("content-length"))
+  if (Number.isFinite(declared) && declared > limit) throw new Error(overLimitMessage)
+  const body = (res as { body?: ReadableStream<Uint8Array> | null }).body
+  if (!body || typeof body.getReader !== "function") {
+    const buf = Buffer.from(await res.arrayBuffer())
+    if (buf.byteLength > limit) throw new Error(overLimitMessage)
+    return buf
+  }
+  const reader = body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    total += value.byteLength
+    if (total > limit) {
+      await reader.cancel().catch(() => {})
+      throw new Error(overLimitMessage)
+    }
+    chunks.push(value)
+  }
+  return Buffer.concat(chunks)
+}
+
 const rawUrl = (r: DiscoverRepo, branch: string, p: string): string =>
   `https://raw.githubusercontent.com/${r.owner}/${r.name}/${branch}/${p.split("/").map(encodeURIComponent).join("/")}`
 const docUrl = (r: DiscoverRepo, branch: string, p: string): string =>
@@ -295,6 +326,13 @@ export async function installDiscoveredSkill(
   const managed = readManaged()
   const conflict = managed.find((m) => m.directory.toLowerCase() === installName.toLowerCase() && m.key !== skill.key)
   if (conflict) return { ok: false, message: `directory "${installName}" is already managed from ${conflict.repo}` }
+  // Reinstall of the same key is a no-op: the transactional rollback below
+  // cannot distinguish THIS install's links from a prior install's, so a
+  // late failure would destroy pre-existing state. Updates are a future
+  // feature (blob-SHA signatures); until then, uninstall first to refresh.
+  if (managed.some((m) => m.key === skill.key) && fs.existsSync(dest)) {
+    return { ok: true, message: "already installed — uninstall first to reinstall/update" }
+  }
 
   const repo: DiscoverRepo = { owner: skill.repo_owner, name: skill.repo_name, branch: skill.repo_branch || "main" }
   let tree: TreeEntry[]
@@ -327,10 +365,17 @@ export async function installDiscoveredSkill(
       const out = path.join(temp, safe)
       fs.mkdirSync(path.dirname(out), { recursive: true })
       const res = await fetchWithTimeout(rawUrl(repo, branch, entryPath), "text/plain", fetchFn)
-      const buf = Buffer.from(await res.arrayBuffer())
-      if (buf.byteLength > MAX_FILE_BYTES) throw new Error(`${entryPath} exceeds the ${MAX_FILE_BYTES / 1024 / 1024}MB per-file limit`)
+      // Streaming ceiling: per-file limit, tightened by the remaining total
+      // budget so the total cap is enforced mid-stream too.
+      const remaining = MAX_TOTAL_BYTES - totalBytes
+      if (remaining <= 0) throw new Error(`download exceeds the ${MAX_TOTAL_BYTES / 1024 / 1024}MB total limit`)
+      const limit = Math.min(MAX_FILE_BYTES, remaining)
+      const overMsg =
+        limit === MAX_FILE_BYTES
+          ? `${entryPath} exceeds the ${MAX_FILE_BYTES / 1024 / 1024}MB per-file limit`
+          : `download exceeds the ${MAX_TOTAL_BYTES / 1024 / 1024}MB total limit`
+      const buf = await readBodyLimited(res, limit, overMsg)
       totalBytes += buf.byteLength
-      if (totalBytes > MAX_TOTAL_BYTES) throw new Error(`download exceeds the ${MAX_TOTAL_BYTES / 1024 / 1024}MB total limit`)
       fs.writeFileSync(out, buf)
     }
     fs.rmSync(dest, { recursive: true, force: true })
@@ -377,15 +422,34 @@ export async function installDiscoveredSkill(
   return { ok: true, message: `installed ${installName}`, linked }
 }
 
-/** Uninstall a managed skill: remove our links into it, then the SSOT copy. */
+/**
+ * Uninstall a managed skill. Commit order makes it transactional: the managed
+ * record is removed FIRST (a failure there changes nothing on disk); if the
+ * disk cleanup then fails, the record is restored so Browse never claims
+ * "Installed" for content that is gone — nor the reverse.
+ */
 export function uninstallManagedSkill(key: string): LinkResult {
   const managed = readManaged()
   const entry = managed.find((m) => m.key === key)
   if (!entry) return { ok: false, message: "not a managed skill" }
   const dir = path.resolve(managedDir(), entry.directory)
   if (path.dirname(dir) !== path.resolve(managedDir())) return { ok: false, message: "invalid managed directory" }
-  const removedLinks = removeOwnedLinksTo(dir)
-  fs.rmSync(dir, { recursive: true, force: true })
-  writeManaged(managed.filter((m) => m.key !== key))
-  return { ok: true, message: `uninstalled ${entry.directory} (${removedLinks} links removed)` }
+
+  try {
+    writeManaged(managed.filter((m) => m.key !== key))
+  } catch (err) {
+    return { ok: false, message: `failed to update install registry — nothing removed (${err instanceof Error ? err.message : err})` }
+  }
+  try {
+    const removedLinks = removeOwnedLinksTo(dir)
+    fs.rmSync(dir, { recursive: true, force: true })
+    return { ok: true, message: `uninstalled ${entry.directory} (${removedLinks} links removed)` }
+  } catch (err) {
+    try {
+      writeManaged(managed)
+    } catch {
+      /* best effort — disk state is partially removed; record restoration failed too */
+    }
+    return { ok: false, message: `failed to remove — record restored (${err instanceof Error ? err.message : err})` }
+  }
 }

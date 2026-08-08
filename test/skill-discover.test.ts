@@ -216,3 +216,90 @@ test("install download limits: oversized single files are refused", async () => 
   assert.match(r.message, /per-file limit/)
   assert.ok(!fs.existsSync(path.join(process.env.USAGEPLANE_HOME!, "skills", "managed", "big")))
 })
+
+test("reinstall of an installed key is a no-op — prior links survive a would-be failure", async () => {
+  const home = makeEnv()
+  const gh = fakeGithub(
+    [{ path: "again/SKILL.md" }],
+    { "again/SKILL.md": "---\nname: again\ndescription: d\n---\n" },
+  )
+  const { skills } = await discoverSkills({ repos: REPO }, gh)
+  assert.equal((await installDiscoveredSkill(skills[0], ["claude-code", "codex"], home, gh)).ok, true)
+
+  const second = await installDiscoveredSkill(skills[0], ["claude-code", "codex"], home, gh)
+  assert.equal(second.ok, true)
+  assert.match(second.message, /already installed/)
+  // Prior installation is fully intact.
+  assert.ok(fs.lstatSync(path.join(home, ".claude", "skills", "again")).isSymbolicLink())
+  assert.ok(fs.lstatSync(path.join(home, ".codex", "skills", "again")).isSymbolicLink())
+  assert.equal(readManaged().length, 1)
+})
+
+test("uninstall registry failure changes nothing on disk; success path still cleans up", async () => {
+  const home = makeEnv()
+  const gh = fakeGithub(
+    [{ path: "tx3/SKILL.md" }],
+    { "tx3/SKILL.md": "---\nname: tx3\ndescription: d\n---\n" },
+  )
+  const { skills } = await discoverSkills({ repos: REPO }, gh)
+  assert.equal((await installDiscoveredSkill(skills[0], ["claude-code"], home, gh)).ok, true)
+
+  // Make the managed registry unwritable (cross-platform injection: a
+  // DIRECTORY at the atomic-write tmp path makes writeFileSync fail):
+  // registry-first commit must abort BEFORE touching any disk state.
+  const skillsDir = path.join(process.env.USAGEPLANE_HOME!, "skills")
+  const tmpBlock = path.join(skillsDir, `managed.json.tmp-${process.pid}`)
+  fs.mkdirSync(tmpBlock, { recursive: true })
+  try {
+    const r = uninstallManagedSkill(skills[0].key)
+    assert.equal(r.ok, false)
+    assert.match(r.message, /nothing removed/)
+    assert.ok(fs.existsSync(path.join(skillsDir, "managed", "tx3")), "managed copy untouched")
+    assert.ok(fs.lstatSync(path.join(home, ".claude", "skills", "tx3")).isSymbolicLink(), "link untouched")
+    assert.equal(readManaged().length, 1, "record still present — Browse stays truthful")
+  } finally {
+    fs.rmSync(tmpBlock, { recursive: true, force: true })
+  }
+
+  const ok = uninstallManagedSkill(skills[0].key)
+  assert.equal(ok.ok, true, ok.message)
+  assert.equal(readManaged().length, 0)
+})
+
+test("download limits stream: oversized bodies are cancelled mid-flight, not buffered", async () => {
+  const home = makeEnv()
+  let cancelled = false
+  const chunk = new Uint8Array(512 * 1024) // 0.5MB chunks, endless stream
+  const gh = (async (url: unknown) => {
+    const u = String(url)
+    if (u.includes("api.github.com")) {
+      return {
+        ok: true, status: 200,
+        headers: { get: () => null },
+        json: async () => ({ tree: [{ path: "stream/SKILL.md", type: "blob", sha: "x" }, { path: "stream/big.bin", type: "blob", sha: "y" }] }),
+      }
+    }
+    if (u.endsWith("SKILL.md")) {
+      const text = "---\nname: stream\ndescription: d\n---\n"
+      return { ok: true, status: 200, headers: { get: () => null }, text: async () => text, arrayBuffer: async () => new TextEncoder().encode(text).buffer }
+    }
+    // big.bin: infinite stream with no content-length — must be cut off.
+    return {
+      ok: true, status: 200,
+      headers: { get: () => null },
+      body: {
+        getReader: () => ({
+          read: async () => ({ done: false, value: chunk }),
+          cancel: async () => { cancelled = true },
+        }),
+      },
+    }
+  }) as unknown as typeof fetch
+
+  const { skills } = await discoverSkills({ repos: REPO }, gh)
+  const r = await installDiscoveredSkill(skills.find((s) => s.name === "stream")!, ["claude-code"], home, gh)
+  assert.equal(r.ok, false)
+  assert.match(r.message, /per-file limit/)
+  assert.equal(cancelled, true, "stream cancelled the moment the ceiling was crossed")
+  assert.ok(!fs.existsSync(path.join(process.env.USAGEPLANE_HOME!, "skills", "managed", "stream")))
+})
