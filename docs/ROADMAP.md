@@ -73,7 +73,8 @@
 - ✅ UI 打磨批次一（2026-08-08，响应用户实测审计 P0/P1）：窄屏 56px 顶栏+汉堡+260px 抽屉导航（侧栏不再吃掉小窗口 216px）；页面标题 48/700→34/600；拆掉全站外层大卡（卡套卡模板感），各页独立卡片模块；emoji 图标全部换成统一 Lucide 线性内联 SVG；导航密度对齐上游 13px/32px；窄屏横向溢出修复（热力图/表格卡内滚动）。**审计定性遵循用户方向：不做 TT 外观复刻，保留双设备 hub+中转站资产核心优势，补信息密度与响应式质感**
 - ✅ UI 打磨批次二（2026-08-08）：P0.5 移动端三处残余溢出清零（420px 五页 doc==viewport 实测）；P1-4 Tokens 交互深化——表头七列排序、Custom 日期区间（UTC 日界含端点，`/api/usage?range=custom&from&to`）、来源卡点击展开模型明细（token/占比/估算成本）
 - ✅ UI 打磨批次三（2026-08-08）：Tokens 项目视图——真页签语义（role=tablist/tab）、八列全排序（SortableHeader 组件：真按钮+键盘+aria-sort，日表复用）、成本按 (project,tool,model) 粒度定价后归并、空项目显式 Unknown 行、短名显示全路径 tooltip；验收实测 Σ项目==范围总计精确相等、420px 无溢出；顺带清 P2 无障碍两项（日期输入 aria-label、来源面板列头标注分母口径）
-- 后续 UI 批次（审计待排）：Skills 详情抽屉/刷新/同步安装工作流（TT skills-manager 后端可移植）；Limits 告警/预测/Provider 显隐/诊断；语言统一待 i18n 基建
+- ✅ UI 打磨批次四（2026-08-08）：**Skills 管理第一刀**（十条边界全落：详情抽屉本机读 SKILL.md 元数据/远端只显来源；User/Shared 技能按 agent 链接安装（Win junction 免管理员/Unix symlink）；插件缓存严格只读；移除仅删注册表（skill-links.json）内自建链接——真实目录/手工链接/最后一份全部拒绝；目标路径严格限定技能根内且名字只来自磁盘扫描；幂等；成功后重扫+device_state+静默推 hub；Refresh 纯重扫）+ **Limits 增强**（线性节奏预测过窗 10% 后显示、告警阈值 off/70/80/90 红色高亮、Provider 显隐、断连诊断提示）+ Tokens ARIA Tabs 补全（tabpanel/aria-controls/roving tabindex/方向键）。Skills Discover（第三方仓库安装）为第二刀待排
+- 后续 UI 批次（审计待排）：Skills Discover 第二刀；语言统一待 i18n 基建
 - 后备（本批次未排）：项目归属升级 git-root、Cursor/Gemini 采集器
 
 ## v0.5 — 中转站侧对齐批次（当前批次，向 All API Hub 靠；用户定 2026-08-08：先于 v0.3 云端）
