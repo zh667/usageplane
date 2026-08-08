@@ -90,7 +90,7 @@ Windows 实机四连验证已跑（2026-08-08），结果与后续动作：
 - ✅ **Codex 对拍验收**：关账（见 v0.2 批次记录）
 - ✅ **Codex 限额抓取**：Windows 实测连通，利用率 16%。真实响应暴露了新形态并已补齐：`limit_window_seconds=2628000`（月窗口，标签 30d，未知秒数通用降级为时长标签）、`reset_after_seconds` 倒计时、数字型 `reset_at`（epoch 秒/毫秒自适应）
 - ✅ **Codex 钩子**：保护逻辑实测生效（TT 占用 notify 时不覆盖）。因 notify 是单值槽位，新增**链式共存**：`hooks install` 遇外来 notify 改写为 `usageplane notify-chain --then <原命令…>`——先跑我们的 sync，再原样转发 payload 调起原命令；uninstall 把槽位原样归还。**Windows 需重跑一次 `hooks install` 启用链式**
-- 🔨 **Windows Claude 限额凭证排查**：doctor 实测 `~/.claude/.credentials.json` 在 Windows 上不存在（但 Claude Code 正常使用、45 个日志文件）——凭证存放位置与 Linux 不同，待探查实际位置后适配 `readClaudeAccessToken`。在此之前 Windows 端 Claude 限额不可用（其余功能不受影响）
+- ✅ **Windows Claude 限额凭证排查**（2026-08-08 定性）：上游侦察确认 TT 的 `readClaudeCodeAccessToken` 在 Windows 读的就是同一个 `~/.claude/.credentials.json`（darwin 才走 Keychain），无第三位置——我们已对齐，无需适配。该机文件确实不存在且凭据管理器无 claude 条目 → 判定该 Windows 的 Claude Code 走 API key/中转站认证（此模式不产生订阅 OAuth，限额窗口对该机本就不存在，"Not connected" 是正确显示）。doctor 增加鉴别提示（检测 env/settings.json 中 ANTHROPIC_* / apiKeyHelper 字段名，永不读值）。合并视图下 Windows 仍可经 pull 看到 VPS 的 Claude 限额
 
 ## v2 — 观望区（明确不承诺）
 

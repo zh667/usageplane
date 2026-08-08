@@ -41,7 +41,29 @@ export function runDoctor(): void {
   check("codex title index", path.join(home, ".codex", "session_index.jsonl"))
 
   console.log("credentials (presence only — contents never printed):")
-  check("claude oauth", path.join(home, ".claude", ".credentials.json"))
+  const claudeCreds = path.join(home, ".claude", ".credentials.json")
+  check("claude oauth", claudeCreds)
+  if (!fs.existsSync(claudeCreds)) {
+    // Missing oauth file + working Claude Code usually means API-key/relay
+    // auth (env or apiKeyHelper) — then subscription limit windows don't
+    // exist for this machine and "Not connected" is the correct display.
+    // Detection is field-NAME presence only; values are never read out.
+    const signals: string[] = []
+    for (const k of ["ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL"]) {
+      if (process.env[k]) signals.push(`env ${k}`)
+    }
+    try {
+      const settings = fs.readFileSync(path.join(home, ".claude", "settings.json"), "utf8")
+      for (const k of ["ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "apiKeyHelper"]) {
+        if (settings.includes(`"${k}"`)) signals.push(`settings.json ${k}`)
+      }
+    } catch {
+      /* no settings file */
+    }
+    if (signals.length > 0) {
+      console.log(`    ↳ API-key/relay auth detected (${signals.join(", ")}) — no subscription oauth on this machine, Claude limits n/a here`)
+    }
+  }
   check("codex auth", path.join(home, ".codex", "auth.json"))
 
   console.log("usageplane:")
