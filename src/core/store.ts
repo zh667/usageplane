@@ -254,17 +254,26 @@ export class Store {
   }
 
   /**
-   * Aggregates for a time range (hour_start >= since; null = all time).
-   * Shapes match the dashboard's usage page needs.
+   * Aggregates for a time range (hour_start >= since, and < until when given;
+   * null since = all time). Shapes match the dashboard's usage page needs.
    */
-  rangeSummary(since: string | null): {
+  rangeSummary(since: string | null, until?: string | null): {
     totals: FullTotals
     tools: (ToolTotals & { cached_input_tokens: number })[]
     models: (ModelTotals & FullTotals)[]
     days: FullDayTotals[]
   } {
-    const where = since ? "WHERE hour_start >= ?" : ""
-    const params = since ? [since] : []
+    const clauses: string[] = []
+    const params: string[] = []
+    if (since) {
+      clauses.push("hour_start >= ?")
+      params.push(since)
+    }
+    if (until) {
+      clauses.push("hour_start < ?")
+      params.push(until)
+    }
+    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : ""
     const cols = `
       SUM(input_tokens) AS input_tokens,
       SUM(output_tokens) AS output_tokens,

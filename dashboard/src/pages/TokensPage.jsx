@@ -12,19 +12,38 @@ const RANGES = [
   ["week", "Week"],
   ["month", "Month"],
   ["total", "Total"],
+  ["custom", "Custom"],
+]
+
+const DAY_COLS = [
+  ["day", "Date"],
+  ["total_tokens", "Total"],
+  ["input_tokens", "Input"],
+  ["output_tokens", "Output"],
+  ["cached_input_tokens", "Cached"],
+  ["reasoning_output_tokens", "Reasoning"],
+  ["conversation_count", "Convs"],
 ]
 
 export default function TokensPage() {
   const [range, setRange] = useState("month")
+  const [from, setFrom] = useState("")
+  const [to, setTo] = useState("")
   const [data, setData] = useState(null)
   const [heat, setHeat] = useState([])
   const [relays, setRelays] = useState([])
   const [relayUsage, setRelayUsage] = useState([])
+  const [sort, setSort] = useState({ key: "day", dir: "desc" })
+  const [toolDetail, setToolDetail] = useState(null)
   const [err, setErr] = useState(null)
 
+  // Custom waits until both bounds are picked; other ranges fetch directly.
+  const query =
+    range === "custom" ? (from && to && from <= to ? `range=custom&from=${from}&to=${to}` : null) : `range=${range}`
   useEffect(() => {
-    getJson(`/api/usage?range=${range}`).then(setData).catch(setErr)
-  }, [range])
+    if (!query) return
+    getJson(`/api/usage?${query}`).then(setData).catch(setErr)
+  }, [query])
   useEffect(() => {
     getJson("/api/heatmap").then(setHeat).catch(() => {})
     getJson("/api/relays").then(setRelays).catch(() => {})
@@ -135,13 +154,32 @@ export default function TokensPage() {
               ))}
             </div>
             <button
-              onClick={() => getJson(`/api/usage?range=${range}`).then(setData)}
+              onClick={() => query && getJson(`/api/usage?${query}`).then(setData)}
               title="Refresh"
               className="rounded-full border border-oai-gray-200 p-2 text-oai-gray-500 hover:text-oai-black dark:border-oai-gray-800 dark:hover:text-oai-white"
             >
               <IconRefresh size={14} />
             </button>
           </div>
+
+          {range === "custom" && (
+            <div className="mb-6 flex flex-wrap items-center gap-2 text-[13px]">
+              <input
+                type="date"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+                className="rounded-full border border-oai-gray-200 bg-transparent px-3 py-1.5 outline-none focus:border-oai-gray-400 dark:border-oai-gray-800"
+              />
+              <span className="text-oai-gray-400">→</span>
+              <input
+                type="date"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+                className="rounded-full border border-oai-gray-200 bg-transparent px-3 py-1.5 outline-none focus:border-oai-gray-400 dark:border-oai-gray-800"
+              />
+              {from && to && from > to && <span className="text-[12px] text-oai-gray-400">start must be ≤ end</span>}
+            </div>
+          )}
 
           <div className="text-center">
             <div className="text-[12px] font-semibold tracking-[0.15em] text-oai-gray-400">TOTAL TOKENS</div>
@@ -156,16 +194,51 @@ export default function TokensPage() {
 
           <div className="mt-6 h-1 rounded-full bg-provider-claude" />
 
-          {/* Narrow viewports: 2-up grid; sm+: original horizontal row. */}
+          {/* Narrow viewports: 2-up grid; sm+: original horizontal row.
+              Cards toggle a per-source model detail panel below. */}
           <div className="mt-5 grid grid-cols-2 gap-3 sm:flex">
-            {[{ tool: "All", total: data.totals.total_tokens, models: models.length }, ...data.tools.map((t) => ({ tool: t.tool.toUpperCase(), total: t.total_tokens, models: data.models.filter((m) => m.tool === t.tool && m.model !== "unknown").length }))].map((c) => (
-              <div key={c.tool} className="rounded-xl border border-oai-gray-200 px-4 py-3 dark:border-oai-gray-800 sm:min-w-[130px]">
-                <div className="text-[13px] font-medium">{c.tool}</div>
+            {[
+              { key: "all", label: "All", total: data.totals.total_tokens, models: models.length },
+              ...data.tools.map((t) => ({
+                key: t.tool,
+                label: t.tool.toUpperCase(),
+                total: t.total_tokens,
+                models: data.models.filter((m) => m.tool === t.tool && m.model !== "unknown").length,
+              })),
+            ].map((c) => (
+              <button
+                key={c.key}
+                onClick={() => setToolDetail(toolDetail === c.key ? null : c.key)}
+                className={`rounded-xl border px-4 py-3 text-left sm:min-w-[130px] ${
+                  toolDetail === c.key
+                    ? "border-oai-gray-400 bg-oai-gray-50 dark:border-oai-gray-600 dark:bg-oai-gray-800/60"
+                    : "border-oai-gray-200 hover:border-oai-gray-300 dark:border-oai-gray-800 dark:hover:border-oai-gray-700"
+                }`}
+              >
+                <div className="text-[13px] font-medium">{c.label}</div>
                 <div className="text-[20px] font-bold">{((c.total / Math.max(1, data.totals.total_tokens)) * 100).toFixed(2)}%</div>
                 <div className="text-[11px] text-oai-gray-400">{c.models} models</div>
-              </div>
+              </button>
             ))}
           </div>
+
+          {toolDetail && (
+            <div className="mt-4 rounded-xl bg-oai-gray-50 px-4 py-3 dark:bg-oai-gray-800/40">
+              {(toolDetail === "all" ? models : models.filter((m) => m.tool === toolDetail)).map((m) => (
+                <div
+                  key={`${m.tool}:${m.model}`}
+                  className="flex items-baseline justify-between border-b border-oai-gray-100 py-1.5 text-[13px] last:border-0 dark:border-oai-gray-800/60"
+                >
+                  <span className="min-w-0 truncate pr-3">{m.model}</span>
+                  <span className="flex shrink-0 gap-4 tabular-nums text-oai-gray-500">
+                    <span>{fmt(m.total_tokens)}</span>
+                    <span className="w-14 text-right">{((m.total_tokens / modelTotal) * 100).toFixed(1)}%</span>
+                    <span className="w-16 text-right">${(m.estimated_cost ?? 0).toFixed(2)}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="up-card p-6">
@@ -176,17 +249,29 @@ export default function TokensPage() {
           <table className="up-table min-w-[520px]">
             <thead>
               <tr>
-                <th>Date</th>
-                <th className="n">Total</th>
-                <th className="n">Input</th>
-                <th className="n">Output</th>
-                <th className="n">Cached</th>
-                <th className="n">Reasoning</th>
-                <th className="n">Convs</th>
+                {DAY_COLS.map(([key, label]) => (
+                  <th
+                    key={key}
+                    className={`cursor-pointer select-none hover:text-oai-gray-600 dark:hover:text-oai-gray-300${key === "day" ? "" : " n"}`}
+                    onClick={() =>
+                      setSort((s) => ({ key, dir: s.key === key && s.dir === "desc" ? "asc" : "desc" }))
+                    }
+                  >
+                    {label}
+                    {sort.key === key && <span className="ml-0.5">{sort.dir === "desc" ? "▾" : "▴"}</span>}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {data.days.map((d) => (
+              {[...data.days]
+                .sort((a, b) => {
+                  const va = a[sort.key]
+                  const vb = b[sort.key]
+                  const c = va < vb ? -1 : va > vb ? 1 : 0
+                  return sort.dir === "asc" ? c : -c
+                })
+                .map((d) => (
                 <tr key={d.day}>
                   <td>{d.day}</td>
                   <td className="n">{fmt(d.total_tokens)}</td>

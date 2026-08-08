@@ -255,3 +255,20 @@ test("device_state snapshot semantics: declared push replaces the group, deletio
     )
   })
 })
+
+test("/api/usage custom range: inclusive UTC day bounds, validation errors", async () => {
+  await withServer(seededDir(), async (base) => {
+    // Seed has buckets on 08-06 and 08-07; a range covering only 08-06 keeps one.
+    const only6 = await fetch(`${base}/api/usage?range=custom&from=2026-08-06&to=2026-08-06`).then((r) => r.json())
+    assert.equal(only6.totals.total_tokens, 30)
+    assert.equal(only6.days.length, 1)
+    assert.equal(only6.days[0].day, "2026-08-06")
+
+    const both = await fetch(`${base}/api/usage?range=custom&from=2026-08-06&to=2026-08-07`).then((r) => r.json())
+    assert.equal(both.totals.total_tokens, 60)
+
+    assert.equal((await fetch(`${base}/api/usage?range=custom&from=2026-08-07&to=2026-08-06`)).status, 400)
+    assert.equal((await fetch(`${base}/api/usage?range=custom&from=bogus&to=2026-08-07`)).status, 400)
+    assert.equal((await fetch(`${base}/api/usage?range=nope`)).status, 400)
+  })
+})

@@ -168,14 +168,31 @@ export function createServer(dir = dataDir()): http.Server {
     const url = new URL(req.url ?? "/", "http://localhost")
     try {
       if (url.pathname === "/api/usage") {
-        const since = rangeSince(url.searchParams.get("range") ?? "month")
-        if (since === undefined) {
-          json(res, 400, { error: "range must be day|week|month|total" })
-          return
+        const range = url.searchParams.get("range") ?? "month"
+        let since: string | null
+        let until: string | null = null
+        if (range === "custom") {
+          // Inclusive UTC calendar-day bounds: from=YYYY-MM-DD&to=YYYY-MM-DD.
+          const from = url.searchParams.get("from") ?? ""
+          const to = url.searchParams.get("to") ?? ""
+          const day = /^\d{4}-\d{2}-\d{2}$/
+          if (!day.test(from) || !day.test(to) || from > to) {
+            json(res, 400, { error: "custom range needs from=YYYY-MM-DD&to=YYYY-MM-DD with from <= to" })
+            return
+          }
+          since = `${from}T00:00:00.000Z`
+          until = new Date(Date.parse(`${to}T00:00:00.000Z`) + 24 * 3600 * 1000).toISOString()
+        } else {
+          const mapped = rangeSince(range)
+          if (mapped === undefined) {
+            json(res, 400, { error: "range must be day|week|month|total|custom" })
+            return
+          }
+          since = mapped
         }
         const store = new Store(dbPath(dir))
         try {
-          const summary = store.rangeSummary(since)
+          const summary = store.rangeSummary(since, until)
           const models = summary.models.map((m) => ({ ...m, estimated_cost: computeRowCost(m) }))
           const estimatedCost = models.reduce((s, m) => s + m.estimated_cost, 0)
           const last7d = store.rangeSummary(new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString()).totals
