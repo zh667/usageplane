@@ -445,11 +445,20 @@ export function uninstallManagedSkill(key: string): LinkResult {
     fs.rmSync(dir, { recursive: true, force: true })
     return { ok: true, message: `uninstalled ${entry.directory} (${removedLinks} links removed)` }
   } catch (err) {
+    // The message must reflect what actually happened — claiming a restore
+    // that also failed would mislead the next debugging session.
+    let restored = true
     try {
       writeManaged(managed)
     } catch {
-      /* best effort — disk state is partially removed; record restoration failed too */
+      restored = false
     }
-    return { ok: false, message: `failed to remove — record restored (${err instanceof Error ? err.message : err})` }
+    const detail = err instanceof Error ? err.message : String(err)
+    return {
+      ok: false,
+      message: restored
+        ? `failed to remove — record restored (${detail})`
+        : `failed to remove AND could not restore the record — run a rescan and remove leftovers manually (${detail})`,
+    }
   }
 }
