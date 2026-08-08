@@ -16,6 +16,7 @@ import { computeRowCost } from "../core/pricing.js"
 import { listSessionsCached } from "../core/sessions.js"
 import { listSkills, skillKey, skillStateRows } from "../core/skills.js"
 import { classifyInstalls, linkSkill, unlinkSkill } from "../core/skill-links.js"
+import { discoverSkills, installDiscoveredSkill, readManaged, uninstallManagedSkill } from "../core/skill-discover.js"
 import { runPush } from "../commands/push.js"
 import { getAdapter } from "../relays/index.js"
 import { DASHBOARD_HTML } from "./dashboard-html.js"
@@ -339,6 +340,55 @@ export function createServer(dir = dataDir(), homeDir = os.homedir()): http.Serv
           store.close()
         }
         json(res, 200, { device: cfg.device, providers: [...local, ...remote] })
+        return
+      }
+      if (url.pathname === "/api/skills/discover") {
+        const result = await discoverSkills({ force: url.searchParams.get("force") === "1" })
+        const installed = new Set(readManaged().map((m) => m.key))
+        json(res, 200, {
+          ...result,
+          skills: result.skills.map((s) => ({ ...s, installed: installed.has(s.key) })),
+        })
+        return
+      }
+      if (url.pathname === "/api/skills/install" && req.method === "POST") {
+        const guard = rejectNonLocalWrite(req)
+        if (guard) {
+          json(res, 403, { error: guard })
+          return
+        }
+        const body = JSON.parse(await readBody(req, 64 * 1024)) as { key?: string; agents?: string[] }
+        if (typeof body.key !== "string" || !Array.isArray(body.agents) || body.agents.length === 0) {
+          json(res, 400, { error: "body must be {key, agents: [...]}" })
+          return
+        }
+        // Resolve the key against the current discover cache/fetch — install
+        // parameters come from OUR discovery data, never raw client fields.
+        const { skills } = await discoverSkills()
+        const skill = skills.find((s) => s.key === body.key)
+        if (!skill) {
+          json(res, 404, { error: "unknown skill key — refresh Browse and retry" })
+          return
+        }
+        const result = await installDiscoveredSkill(skill, body.agents.map(String), homeDir)
+        if (result.ok) await rescanSkillState()
+        json(res, result.ok ? 200 : 409, result)
+        return
+      }
+      if (url.pathname === "/api/skills/uninstall" && req.method === "POST") {
+        const guard = rejectNonLocalWrite(req)
+        if (guard) {
+          json(res, 403, { error: guard })
+          return
+        }
+        const body = JSON.parse(await readBody(req, 8 * 1024)) as { key?: string }
+        if (typeof body.key !== "string") {
+          json(res, 400, { error: "body must be {key}" })
+          return
+        }
+        const result = uninstallManagedSkill(body.key)
+        if (result.ok) await rescanSkillState()
+        json(res, result.ok ? 200 : 409, result)
         return
       }
       if (url.pathname === "/api/skills/detail") {

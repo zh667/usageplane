@@ -100,14 +100,28 @@ export async function linkSkill(key: string, agent: string, home = os.homedir())
   // link is removed, stranding the outer one.
   const source = canonical(anyInstall)
   if (!source) return { ok: false, message: "existing install does not resolve — fix or remove it first" }
+  return createOwnedLink(source, agent, home)
+}
 
-  // Target name comes from the scanned source dir's basename — never from
-  // client input — and must resolve strictly inside the agent's skills root.
+/**
+ * Shared primitive: link `source` (a resolved real directory) into an agent's
+ * skills root and record ownership. Used by linkSkill and the Discover
+ * installer. The target name is the source's basename — never client input.
+ */
+export function createOwnedLink(source: string, agent: string, home = os.homedir()): LinkResult {
+  const root = agentSkillDirs(home)[agent]
+  if (!root) return { ok: false, message: `unknown agent "${agent}"` }
   const target = path.resolve(root, path.basename(source))
   if (!pathStrictlyWithin(path.resolve(root), target)) {
     return { ok: false, message: "refusing target outside the skills root" }
   }
-  if (fs.existsSync(target) || isLink(target)) {
+  if (isLink(target) || fs.existsSync(target)) {
+    // Idempotent when it's our own link already pointing at this source.
+    const reg = readRegistry()
+    const rec = reg.links.find((l) => path.resolve(l.target) === target)
+    if (rec && canonical(target) === source && rec.source === source) {
+      return { ok: true, message: "already installed — nothing to do" }
+    }
     return { ok: false, message: "target path already exists — refusing to overwrite" }
   }
 
@@ -125,6 +139,24 @@ export async function linkSkill(key: string, agent: string, home = os.homedir())
     return { ok: false, message: `failed to record link — rolled back (${err instanceof Error ? err.message : err})` }
   }
   return { ok: true, message: `linked for ${agent}` }
+}
+
+/** Remove every registry-owned link that resolves into `sourceDir` (used when
+ *  uninstalling a managed skill). Returns the number of links removed. */
+export function removeOwnedLinksTo(sourceDir: string): number {
+  const reg = readRegistry()
+  const keep: LinkRecord[] = []
+  let removed = 0
+  for (const l of reg.links) {
+    if (path.resolve(l.source) === path.resolve(sourceDir) && isLink(l.target) && canonical(l.target) === l.source) {
+      fs.rmSync(l.target, { recursive: true, force: true })
+      removed++
+    } else {
+      keep.push(l)
+    }
+  }
+  if (removed > 0) writeRegistry({ links: keep })
+  return removed
 }
 
 /** Remove an agent's install ONLY when it is a link recorded in our registry. */

@@ -93,6 +93,57 @@ export default function SkillsPage() {
     }
   }
 
+  // --- Browse (discover) tab ------------------------------------------------
+  const [tab, setTab] = useState("my")
+  const [browse, setBrowse] = useState(null) // {skills, cached, error}
+  const [browseQ, setBrowseQ] = useState("")
+  const [installMsg, setInstallMsg] = useState(null)
+
+  const loadBrowse = (force = false) => {
+    setBrowse(null)
+    getJson(`/api/skills/discover${force ? "?force=1" : ""}`)
+      .then(setBrowse)
+      .catch((e) => setBrowse({ skills: [], error: e.message }))
+  }
+  useEffect(() => {
+    if (tab === "browse" && browse === null) loadBrowse()
+  }, [tab])
+
+  const install = async (s) => {
+    setBusy(true)
+    setInstallMsg(null)
+    try {
+      const r = await postJson("/api/skills/install", { key: s.key, agents: ["claude-code", "codex"] })
+      setInstallMsg({ ok: true, text: `${r.message} — Claude: ${r.linked?.["claude-code"]}, Codex: ${r.linked?.codex}` })
+      loadBrowse()
+      reload()
+    } catch (e) {
+      setInstallMsg({ ok: false, text: e.message })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const uninstall = async (s) => {
+    setBusy(true)
+    setInstallMsg(null)
+    try {
+      const r = await postJson("/api/skills/uninstall", { key: s.key })
+      setInstallMsg({ ok: true, text: r.message })
+      loadBrowse()
+      reload()
+    } catch (e) {
+      setInstallMsg({ ok: false, text: e.message })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const browseFiltered = (browse?.skills ?? []).filter((s) => {
+    const needle = browseQ.trim().toLowerCase()
+    return !needle || `${s.name} ${s.description} ${s.repo_owner}/${s.repo_name}`.toLowerCase().includes(needle)
+  })
+
   const agents = useMemo(
     () => [...new Set((skills ?? []).flatMap((s) => s.agents))].sort(),
     [skills],
@@ -115,13 +166,108 @@ export default function SkillsPage() {
     <div className="px-2">
       <h1 className="font-oai text-hero">Skills</h1>
 
-      <div className="mt-4 flex gap-6 border-b border-oai-gray-200 text-[14px] dark:border-oai-gray-800">
-        <span className="border-b-2 border-oai-black pb-2 font-medium dark:border-oai-white">My Skills</span>
-        <span className="pb-2 text-oai-gray-400" title="云端技能库随官方 hub（v0.3）上线">
-          Browse
-        </span>
+      <div role="tablist" aria-label="Skills view" className="mt-4 flex gap-6 border-b border-oai-gray-200 text-[14px] dark:border-oai-gray-800">
+        {[
+          ["my", "My Skills"],
+          ["browse", "Browse"],
+        ].map(([key, label]) => (
+          <button
+            key={key}
+            role="tab"
+            aria-selected={tab === key}
+            tabIndex={tab === key ? 0 : -1}
+            onClick={() => setTab(key)}
+            className={
+              tab === key
+                ? "border-b-2 border-oai-black pb-2 font-medium dark:border-oai-white"
+                : "pb-2 text-oai-gray-400 hover:text-oai-black dark:hover:text-oai-white"
+            }
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
+      {tab === "browse" && (
+        <div role="tabpanel" aria-label="Browse">
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <input
+              value={browseQ}
+              onChange={(e) => setBrowseQ(e.target.value)}
+              placeholder="Search discoverable skills…"
+              className="w-72 rounded-full border border-oai-gray-200 bg-transparent px-4 py-1.5 text-[13px] outline-none placeholder:text-oai-gray-400 focus:border-oai-gray-400 dark:border-oai-gray-800"
+            />
+            <button
+              onClick={() => loadBrowse(true)}
+              disabled={busy || browse === null}
+              title="Refetch the skill repositories (bypasses the 1h cache)"
+              className="rounded-full border border-oai-gray-200 p-2 text-oai-gray-500 hover:text-oai-black disabled:opacity-50 dark:border-oai-gray-800 dark:hover:text-oai-white"
+            >
+              <IconRefresh size={14} />
+            </button>
+            <span className="ml-auto text-[12px] text-oai-gray-400">
+              {browse === null ? "fetching repositories…" : `${browseFiltered.length} of ${browse.skills.length} skills${browse.cached ? " · cached" : ""}`}
+            </span>
+          </div>
+          {installMsg && (
+            <div className={`mt-3 rounded-lg px-3 py-2 text-[12px] ${installMsg.ok ? "bg-brand-500/10 text-brand-600" : "bg-red-500/10 text-red-600"}`}>
+              {installMsg.text}
+            </div>
+          )}
+          {browse?.error && <div className="mt-3 rounded-lg bg-amber-500/10 px-3 py-2 text-[12px] text-amber-600">{browse.error}</div>}
+          <div className="up-card mt-4 px-5">
+            {browse === null && <div className="p-8 text-oai-gray-400">loading…</div>}
+            {browseFiltered.map((s) => (
+              <div key={s.key} className="border-b border-oai-gray-100 py-3.5 last:border-0 dark:border-oai-gray-800/60">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                  <span className="flex min-w-0 items-center gap-2 text-[14px] font-semibold">
+                    <span className="truncate">{s.name}</span>
+                    <a
+                      href={s.readme_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="max-w-[240px] truncate rounded-full bg-oai-gray-100 px-2 py-0.5 text-[10px] font-normal text-oai-gray-500 hover:text-oai-black dark:bg-oai-gray-800 dark:hover:text-oai-white"
+                      title={`${s.repo_owner}/${s.repo_name} — view SKILL.md on GitHub`}
+                    >
+                      {s.repo_owner}/{s.repo_name}
+                    </a>
+                  </span>
+                  <span className="ml-auto flex shrink-0 gap-2">
+                    {s.installed ? (
+                      <>
+                        <span className="rounded-full bg-brand-500/10 px-2 py-0.5 text-[11px] text-brand-600">Installed</span>
+                        <button
+                          onClick={() => uninstall(s)}
+                          disabled={busy}
+                          className="rounded-full border border-oai-gray-200 px-3 py-1 text-[12px] text-oai-gray-500 hover:border-red-300 hover:text-red-600 disabled:opacity-50 dark:border-oai-gray-700"
+                        >
+                          卸载
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => install(s)}
+                        disabled={busy}
+                        title="下载到 UsagePlane 托管目录并链接给 Claude 与 Codex"
+                        className="rounded-full border border-brand-500 px-3 py-1 text-[12px] text-brand-600 hover:bg-brand-500/10 disabled:opacity-50"
+                      >
+                        安装
+                      </button>
+                    )}
+                  </span>
+                </div>
+                <p className="mt-1 line-clamp-2 max-w-4xl text-[13px] text-oai-gray-500">{s.description || "—"}</p>
+              </div>
+            ))}
+            {browse !== null && browseFiltered.length === 0 && !browse?.error && (
+              <div className="p-8 text-center text-oai-gray-400">no skills match</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {tab === "my" && (
+      <>
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <div className="flex rounded-full border border-oai-gray-200 p-0.5 dark:border-oai-gray-800">
           <button onClick={() => setAgent("all")} className={`up-pill${agent === "all" ? " active" : ""}`}>
@@ -217,6 +363,8 @@ export default function SkillsPage() {
           <div className="p-8 text-center text-oai-gray-400">no skills match</div>
         )}
       </div>
+      </>
+      )}
 
       {detail && (
         <div className="fixed inset-0 z-30">
