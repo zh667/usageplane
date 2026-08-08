@@ -156,9 +156,10 @@ export default function TokensPage() {
 
           <div className="mt-6 h-1 rounded-full bg-provider-claude" />
 
-          <div className="mt-5 flex gap-3">
+          {/* Narrow viewports: 2-up grid; sm+: original horizontal row. */}
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:flex">
             {[{ tool: "All", total: data.totals.total_tokens, models: models.length }, ...data.tools.map((t) => ({ tool: t.tool.toUpperCase(), total: t.total_tokens, models: data.models.filter((m) => m.tool === t.tool && m.model !== "unknown").length }))].map((c) => (
-              <div key={c.tool} className="min-w-[130px] rounded-xl border border-oai-gray-200 px-4 py-3 dark:border-oai-gray-800">
+              <div key={c.tool} className="rounded-xl border border-oai-gray-200 px-4 py-3 dark:border-oai-gray-800 sm:min-w-[130px]">
                 <div className="text-[13px] font-medium">{c.tool}</div>
                 <div className="text-[20px] font-bold">{((c.total / Math.max(1, data.totals.total_tokens)) * 100).toFixed(2)}%</div>
                 <div className="text-[11px] text-oai-gray-400">{c.models} models</div>

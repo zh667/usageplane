@@ -137,13 +137,14 @@ export default function SessionsPage() {
         {filtered.map((s) => (
           <div
             key={`${s.tool}:${s.id}`}
-            className="flex items-center gap-4 border-b border-oai-gray-100 py-3.5 last:border-0 dark:border-oai-gray-800/60"
+            className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-oai-gray-100 py-3.5 last:border-0 dark:border-oai-gray-800/60"
           >
             <span
               className={`h-2.5 w-2.5 shrink-0 rounded-full ${s.tool === "codex" ? "bg-provider-codex" : "bg-provider-claude"}`}
               title={s.tool}
             />
-            <div className="min-w-0 flex-1">
+            {/* basis forces the stats+copy group onto its own row below ~420px */}
+            <div className="min-w-0 flex-1 basis-[220px]">
               <div className="flex items-center gap-2">
                 <span className="truncate text-[14px] font-medium">{s.title}</span>
                 {s.device_id && s.device_id !== selfDevice && (
@@ -159,19 +160,21 @@ export default function SessionsPage() {
                 {[s.project || "—", s.model, fmtDate(s.ended_at), fmtDuration(s.duration_ms)].join(" · ")}
               </div>
             </div>
-            <div className="flex shrink-0 gap-5 text-right">
-              {[
-                [fmt(s.total_tokens), "Tokens"],
-                [String(s.turns), "Turns"],
-                [String(s.edits), "Edits"],
-              ].map(([v, l]) => (
-                <div key={l} className="w-14">
-                  <div className="text-[13px] font-semibold">{v}</div>
-                  <div className="text-[11px] text-oai-gray-400">{l}</div>
-                </div>
-              ))}
+            <div className="ml-auto flex shrink-0 items-center gap-5">
+              <div className="flex gap-5 text-right">
+                {[
+                  [fmt(s.total_tokens), "Tokens"],
+                  [String(s.turns), "Turns"],
+                  [String(s.edits), "Edits"],
+                ].map(([v, l]) => (
+                  <div key={l} className="w-14">
+                    <div className="text-[13px] font-semibold">{v}</div>
+                    <div className="text-[11px] text-oai-gray-400">{l}</div>
+                  </div>
+                ))}
+              </div>
+              <CopyButton command={s.resume_command} />
             </div>
-            <CopyButton command={s.resume_command} />
           </div>
         ))}
         {sessions !== null && filtered.length === 0 && <EmptyState tool={tool} sessions={sessions} devices={devices} />}

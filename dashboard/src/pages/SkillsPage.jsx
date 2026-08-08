@@ -94,13 +94,15 @@ export default function SkillsPage() {
             key={`${s.scope}:${s.source ?? ""}:${s.name}`}
             className="border-b border-oai-gray-100 py-3.5 last:border-0 dark:border-oai-gray-800/60"
           >
-            <div className="flex items-center justify-between gap-4">
-              <span className="flex items-center gap-2 text-[14px] font-semibold">
-                {s.name}
+            {/* flex-wrap lets the matrix drop to its own row on narrow
+                viewports instead of stretching the document sideways. */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+              <span className="flex min-w-0 items-center gap-2 text-[14px] font-semibold">
+                <span className="truncate">{s.name}</span>
                 {s.scope === "plugin" && (
                   <span
                     title={`plugin cache${s.source ? ` — ${s.source}` : ""} (read-only inventory)`}
-                    className="rounded-full bg-oai-gray-100 px-2 py-0.5 text-[10px] font-normal text-oai-gray-400 dark:bg-oai-gray-800"
+                    className="max-w-[220px] truncate rounded-full bg-oai-gray-100 px-2 py-0.5 text-[10px] font-normal text-oai-gray-400 dark:bg-oai-gray-800"
                   >
                     Plugin{s.source ? ` · ${s.source}` : ""}
                   </span>
@@ -108,13 +110,15 @@ export default function SkillsPage() {
               </span>
               {/* Explicit device×agent matrix — the local device is labeled too,
                   so the same skill reads identically from any device's page. */}
-              <span className="flex shrink-0 flex-wrap justify-end gap-1.5">
+              <span className="ml-auto flex min-w-0 flex-wrap justify-end gap-1.5">
                 {(s.installs ?? [{ device: "", agents: s.agents }]).map((inst) => (
                   <span
                     key={inst.device}
-                    className="flex items-center gap-1 rounded-full border border-oai-gray-200 py-0.5 pl-2 pr-1 dark:border-oai-gray-700"
+                    className="flex min-w-0 items-center gap-1 rounded-full border border-oai-gray-200 py-0.5 pl-2 pr-1 dark:border-oai-gray-700"
                   >
-                    <span className={`text-[10px] ${inst.device === selfDevice ? "font-medium" : "text-oai-gray-400"}`}>
+                    <span
+                      className={`max-w-[150px] truncate text-[10px] ${inst.device === selfDevice ? "font-medium" : "text-oai-gray-400"}`}
+                    >
                       {inst.device === selfDevice ? `${inst.device} (本机)` : inst.device || "—"}
                     </span>
                     {inst.agents.map((a) => (
