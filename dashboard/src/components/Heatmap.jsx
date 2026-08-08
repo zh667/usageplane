@@ -1,60 +1,106 @@
-// GitHub-style activity heatmap (own implementation of the TokenTracker
-// ActivityHeatmap concept): ~6 months of UTC days, brand-green scale.
-const LEVELS = ["bg-oai-gray-100 dark:bg-oai-gray-800", "bg-brand-200", "bg-brand-300", "bg-brand-500", "bg-brand-700"]
-const WEEKS = 26
-const DAY_MS = 24 * 3600 * 1000
+// GitHub-style activity heatmap — layout semantics ported from TokenTracker
+// ActivityHeatmap.jsx (MIT, 2D only): 12px cells, 3px gaps, per-week month
+// labels, weekday labels, five-step Less/More legend, and an auto-scroll to
+// the newest date. Level math and the concrete palettes live in
+// ../lib/activity-heatmap.js — no framework color tokens involved.
+import { useEffect, useMemo, useRef, useState } from "react"
+import {
+  buildActivityHeatmap,
+  HEATMAP_COLORS_DARK,
+  HEATMAP_COLORS_LIGHT,
+  monthLabels,
+} from "../lib/activity-heatmap.js"
+
+const CELL = 12
+const GAP = 3
+const LABEL_W = 28
+
+/** The theme toggle flips a class on <html> without re-rendering React —
+ *  observe it so the palette follows the theme live. */
+function useIsDark() {
+  const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"))
+  useEffect(() => {
+    const observer = new MutationObserver(() =>
+      setDark(document.documentElement.classList.contains("dark")),
+    )
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] })
+    return () => observer.disconnect()
+  }, [])
+  return dark
+}
 
 export default function Heatmap({ days }) {
-  const byDay = new Map(days.map((d) => [d.day, d.total_tokens]))
-  const max = Math.max(1, ...days.map((d) => d.total_tokens))
+  const isDark = useIsDark()
+  const colors = isDark ? HEATMAP_COLORS_DARK : HEATMAP_COLORS_LIGHT
+  const scrollRef = useRef(null)
 
-  const today = new Date()
-  const end = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())
-  const endDow = new Date(end).getUTCDay()
-  const start = end - ((WEEKS - 1) * 7 + endDow) * DAY_MS
+  const grid = useMemo(() => buildActivityHeatmap({ days: days ?? [] }), [days])
+  const months = useMemo(() => monthLabels(grid.weeks), [grid])
 
-  const weeks = []
-  for (let w = 0; w < WEEKS; w++) {
-    const col = []
-    for (let dow = 0; dow < 7; dow++) {
-      const t = start + (w * 7 + dow) * DAY_MS
-      if (t > end) break
-      const key = new Date(t).toISOString().slice(0, 10)
-      const v = byDay.get(key) ?? 0
-      const level = v === 0 ? 0 : 1 + Math.min(3, Math.floor((v / max) * 4))
-      col.push({ key, v, level })
-    }
-    weeks.push(col)
-  }
+  // Newest dates live at the right edge — land there on mount and reload.
+  useEffect(() => {
+    const el = scrollRef.current
+    if (el) el.scrollLeft = el.scrollWidth
+  }, [grid])
 
-  const monthLabels = weeks.map((col, i) => {
-    const d = new Date(start + i * 7 * DAY_MS)
-    return d.getUTCDate() <= 7 ? d.toLocaleString("en", { month: "short", timeZone: "UTC" }).toUpperCase() : ""
-  })
+  const colTemplate = `repeat(${grid.weeks.length}, ${CELL}px)`
 
   return (
-    // min-w keeps cells legible; narrow viewports scroll inside the card
-    // instead of stretching the whole page column past the viewport.
-    <div className="overflow-x-auto">
-      <div className="min-w-[300px]">
-      <div className="mb-1 grid grid-flow-col gap-[3px] text-[9px] text-oai-gray-400" style={{ gridTemplateColumns: `repeat(${WEEKS}, 1fr)` }}>
-        {monthLabels.map((m, i) => (
-          <span key={i}>{m}</span>
-        ))}
-      </div>
-      <div className="grid grid-flow-col gap-[3px]" style={{ gridTemplateColumns: `repeat(${WEEKS}, 1fr)` }}>
-        {weeks.map((col, i) => (
-          <div key={i} className="grid gap-[3px]" style={{ gridTemplateRows: "repeat(7, 1fr)" }}>
-            {col.map((cell) => (
-              <div
-                key={cell.key}
-                title={`${cell.key} · ${cell.v.toLocaleString()} tokens`}
-                className={`aspect-square w-full rounded-[2px] ${LEVELS[cell.level]}`}
-              />
+    <div>
+      <div ref={scrollRef} className="overflow-x-auto pb-1">
+        <div style={{ width: LABEL_W + grid.weeks.length * (CELL + GAP) - GAP }}>
+          {/* month labels */}
+          <div
+            className="mb-1 grid text-[9px] text-oai-gray-400"
+            style={{ gridTemplateColumns: colTemplate, columnGap: GAP, marginLeft: LABEL_W }}
+          >
+            {months.map((m, i) => (
+              <span key={i} className="overflow-visible whitespace-nowrap">
+                {m}
+              </span>
             ))}
           </div>
-        ))}
+          <div className="flex">
+            {/* weekday labels */}
+            <div
+              className="grid shrink-0 text-[9px] text-oai-gray-400"
+              style={{ width: LABEL_W, gridTemplateRows: `repeat(7, ${CELL}px)`, rowGap: GAP }}
+            >
+              {["", "Mon", "", "Wed", "", "Fri", ""].map((d, i) => (
+                <span key={i} className="leading-[12px]">
+                  {d}
+                </span>
+              ))}
+            </div>
+            {/* cells */}
+            <div className="grid grid-flow-col" style={{ gridTemplateColumns: colTemplate, columnGap: GAP }}>
+              {grid.weeks.map((week, wi) => (
+                <div key={wi} className="grid" style={{ gridTemplateRows: `repeat(7, ${CELL}px)`, rowGap: GAP }}>
+                  {week.map((cell, di) =>
+                    cell ? (
+                      <div
+                        key={cell.day}
+                        title={`${cell.day} · ${cell.value.toLocaleString()} tokens`}
+                        className="rounded-[2px]"
+                        style={{ width: CELL, height: CELL, background: colors[cell.level] }}
+                      />
+                    ) : (
+                      <div key={`empty-${wi}-${di}`} style={{ width: CELL, height: CELL }} />
+                    ),
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
+      {/* legend */}
+      <div className="mt-1.5 flex items-center justify-end gap-1 text-[10px] text-oai-gray-400">
+        <span className="mr-0.5">Less</span>
+        {colors.map((c) => (
+          <span key={c} className="inline-block rounded-[2px]" style={{ width: 10, height: 10, background: c }} />
+        ))}
+        <span className="ml-0.5">More</span>
       </div>
     </div>
   )
