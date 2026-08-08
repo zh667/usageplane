@@ -4,6 +4,7 @@
 // (estimated vs site-reported) are never merged.
 import { useEffect, useState } from "react"
 import Heatmap from "../components/Heatmap.jsx"
+import { IconRefresh } from "../components/icons.jsx"
 import { fmt, getJson } from "../lib/format.js"
 
 const RANGES = [
@@ -39,7 +40,7 @@ export default function TokensPage() {
   return (
     <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
       {/* left column */}
-      <div className="space-y-6">
+      <div className="min-w-0 space-y-6">
         <section className="up-card p-5">
           <div className="grid grid-cols-4 gap-2 text-center">
             {[
@@ -123,7 +124,7 @@ export default function TokensPage() {
       </div>
 
       {/* right column */}
-      <div className="space-y-6">
+      <div className="min-w-0 space-y-6">
         <section className="up-card p-6">
           <div className="mb-6 flex items-center justify-between">
             <div className="flex gap-1">
@@ -135,9 +136,10 @@ export default function TokensPage() {
             </div>
             <button
               onClick={() => getJson(`/api/usage?range=${range}`).then(setData)}
-              className="rounded-full border border-oai-gray-200 px-3 py-1.5 text-[13px] text-oai-gray-500 hover:text-oai-black dark:border-oai-gray-800 dark:hover:text-oai-white"
+              title="Refresh"
+              className="rounded-full border border-oai-gray-200 p-2 text-oai-gray-500 hover:text-oai-black dark:border-oai-gray-800 dark:hover:text-oai-white"
             >
-              ↻
+              <IconRefresh size={14} />
             </button>
           </div>
 
@@ -169,7 +171,8 @@ export default function TokensPage() {
           <div className="mb-3 flex gap-4 text-[13px]">
             <span className="rounded-full bg-oai-gray-100 px-3 py-1 font-medium dark:bg-oai-gray-800">Daily Breakdown</span>
           </div>
-          <table className="up-table">
+          <div className="overflow-x-auto">
+          <table className="up-table min-w-[520px]">
             <thead>
               <tr>
                 <th>Date</th>
@@ -195,6 +198,7 @@ export default function TokensPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </section>
       </div>
     </div>

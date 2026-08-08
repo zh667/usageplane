@@ -2,6 +2,7 @@
 // Limits Display), setting rows with title+description left and control
 // right, version footer.
 import { useEffect, useState } from "react"
+import { IconLimits, IconPalette, IconUser } from "../components/icons.jsx"
 import { getJson } from "../lib/format.js"
 import { getPref, setPref } from "../lib/prefs.js"
 
@@ -30,9 +31,9 @@ function Row({ title, desc, children }) {
 }
 
 const SECTIONS = [
-  ["appearance", "Appearance", "🎨"],
-  ["account", "Account", "👤"],
-  ["limits", "Limits Display", "⏱"],
+  ["appearance", "Appearance", IconPalette],
+  ["account", "Account", IconUser],
+  ["limits", "Limits Display", IconLimits],
 ]
 
 export default function SettingsPage() {
@@ -55,13 +56,13 @@ export default function SettingsPage() {
 
       <div className="mt-6 grid gap-8 md:grid-cols-[200px_1fr]">
         <nav>
-          {SECTIONS.map(([key, label, icon]) => (
+          {SECTIONS.map(([key, label, Icon]) => (
             <button
               key={key}
               onClick={() => setSection(key)}
               className={`up-nav-item${section === key ? " active" : ""}`}
             >
-              <span className="w-4 text-center text-[13px] opacity-70">{icon}</span>
+              <Icon size={15} className="opacity-70" />
               {label}
             </button>
           ))}
@@ -73,7 +74,7 @@ export default function SettingsPage() {
               <div className="up-nav-label px-0">APPEARANCE</div>
               <Row title="Theme" desc="Choose how UsagePlane looks across the dashboard.">
                 <Seg
-                  options={[["light", "☀ Light"], ["dark", "🌙 Dark"], ["system", "🖥 System"]]}
+                  options={[["light", "Light"], ["dark", "Dark"], ["system", "System"]]}
                   value={getPref("theme", "system")}
                   onChange={(v) => set("theme", v)}
                 />

@@ -87,12 +87,12 @@ export default function SkillsPage() {
         </span>
       </div>
 
-      <div className="mt-2">
+      <div className="up-card mt-4 px-5">
         {skills === null && <div className="p-8 text-oai-gray-400">loading…</div>}
         {filtered.map((s) => (
           <div
             key={`${s.scope}:${s.source ?? ""}:${s.name}`}
-            className="border-b border-oai-gray-100 py-3.5 dark:border-oai-gray-800/60"
+            className="border-b border-oai-gray-100 py-3.5 last:border-0 dark:border-oai-gray-800/60"
           >
             <div className="flex items-center justify-between gap-4">
               <span className="flex items-center gap-2 text-[14px] font-semibold">

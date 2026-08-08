@@ -37,7 +37,7 @@ body {
 
 /* Sidebar item */
 .up-nav-item {
-  @apply flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[14px] text-oai-gray-700 hover:bg-oai-gray-200/60;
+  @apply flex w-full items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] text-oai-gray-700 hover:bg-oai-gray-200/60;
 }
 .dark .up-nav-item {
   @apply text-oai-gray-300 hover:bg-oai-gray-800;

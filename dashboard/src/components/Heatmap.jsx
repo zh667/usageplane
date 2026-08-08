@@ -33,7 +33,10 @@ export default function Heatmap({ days }) {
   })
 
   return (
-    <div>
+    // min-w keeps cells legible; narrow viewports scroll inside the card
+    // instead of stretching the whole page column past the viewport.
+    <div className="overflow-x-auto">
+      <div className="min-w-[300px]">
       <div className="mb-1 grid grid-flow-col gap-[3px] text-[9px] text-oai-gray-400" style={{ gridTemplateColumns: `repeat(${WEEKS}, 1fr)` }}>
         {monthLabels.map((m, i) => (
           <span key={i}>{m}</span>
@@ -51,6 +54,7 @@ export default function Heatmap({ days }) {
             ))}
           </div>
         ))}
+      </div>
       </div>
     </div>
   )

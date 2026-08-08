@@ -132,12 +132,12 @@ export default function SessionsPage() {
         </span>
       </div>
 
-      <div className="mt-4">
+      <div className="up-card mt-4 px-5">
         {sessions === null && <div className="p-8 text-oai-gray-400">loading…</div>}
         {filtered.map((s) => (
           <div
             key={`${s.tool}:${s.id}`}
-            className="flex items-center gap-4 border-b border-oai-gray-100 py-3.5 dark:border-oai-gray-800/60"
+            className="flex items-center gap-4 border-b border-oai-gray-100 py-3.5 last:border-0 dark:border-oai-gray-800/60"
           >
             <span
               className={`h-2.5 w-2.5 shrink-0 rounded-full ${s.tool === "codex" ? "bg-provider-codex" : "bg-provider-claude"}`}

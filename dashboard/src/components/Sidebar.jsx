@@ -1,24 +1,34 @@
 // Sidebar layout mirrors TokenTracker's: grouped nav (GENERAL / TOOLS /
-// ACCOUNT), theme toggle bottom-left, GitHub link bottom-right.
+// ACCOUNT), theme toggle bottom-left, GitHub link bottom-right. Rendered
+// fixed on desktop and inside a drawer on narrow screens (App decides).
 import { NavLink } from "react-router-dom"
 import { setPref } from "../lib/prefs.js"
+import {
+  IconLimits,
+  IconPlane,
+  IconSessions,
+  IconSettings,
+  IconSkills,
+  IconSun,
+  IconTokens,
+} from "./icons.jsx"
 
 const GROUPS = [
   {
     label: "GENERAL",
     items: [
-      { to: "/", label: "Tokens", icon: "📊" },
-      { to: "/sessions", label: "Sessions", icon: "🕘" },
-      { to: "/limits", label: "Limits", icon: "⏱" },
+      { to: "/", label: "Tokens", Icon: IconTokens },
+      { to: "/sessions", label: "Sessions", Icon: IconSessions },
+      { to: "/limits", label: "Limits", Icon: IconLimits },
     ],
   },
   {
     label: "TOOLS",
-    items: [{ to: "/skills", label: "Skills", icon: "✨" }],
+    items: [{ to: "/skills", label: "Skills", Icon: IconSkills }],
   },
   {
     label: "ACCOUNT",
-    items: [{ to: "/settings", label: "Settings", icon: "⚙️" }],
+    items: [{ to: "/settings", label: "Settings", Icon: IconSettings }],
   },
 ]
 
@@ -26,29 +36,38 @@ function toggleTheme() {
   setPref("theme", document.documentElement.classList.contains("dark") ? "light" : "dark")
 }
 
-export default function Sidebar() {
+export function Brand() {
   return (
-    <aside className="flex w-[216px] shrink-0 flex-col px-2 pb-3 pt-4">
-      <div className="flex items-center gap-2 px-3 pb-2">
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-oai-black text-[13px] text-white dark:bg-oai-white dark:text-oai-black">
-          ✈
-        </span>
-        <span className="text-[15px] font-semibold">UsagePlane</span>
+    <span className="flex items-center gap-2">
+      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-oai-black text-white dark:bg-oai-white dark:text-oai-black">
+        <IconPlane size={14} />
+      </span>
+      <span className="text-[15px] font-semibold">UsagePlane</span>
+    </span>
+  )
+}
+
+export default function Sidebar({ onNavigate }) {
+  return (
+    <aside className="flex h-full w-[216px] shrink-0 flex-col px-2 pb-3 pt-4">
+      <div className="px-3 pb-2">
+        <Brand />
       </div>
 
       <nav className="flex-1">
         {GROUPS.map((group) => (
           <div key={group.label}>
             <div className="up-nav-label">{group.label}</div>
-            {group.items.map((item) => (
+            {group.items.map(({ to, label, Icon }) => (
               <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === "/"}
+                key={to}
+                to={to}
+                end={to === "/"}
+                onClick={onNavigate}
                 className={({ isActive }) => `up-nav-item${isActive ? " active" : ""}`}
               >
-                <span className="w-4 text-center text-[13px] opacity-70">{item.icon}</span>
-                {item.label}
+                <Icon size={15} className="opacity-70" />
+                {label}
               </NavLink>
             ))}
           </div>
@@ -61,7 +80,7 @@ export default function Sidebar() {
           title="Toggle theme"
           className="rounded-full p-1.5 text-oai-gray-500 hover:bg-oai-gray-200 dark:hover:bg-oai-gray-800"
         >
-          ☀
+          <IconSun size={15} />
         </button>
         <a
           href="https://github.com/zh667/usageplane"

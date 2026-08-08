@@ -60,7 +60,7 @@ module.exports = {
       fontSize: {
         display: ["72px", { lineHeight: "1", fontWeight: "700", letterSpacing: "-0.03em" }],
         "display-sm": ["56px", { lineHeight: "1", fontWeight: "700", letterSpacing: "-0.02em" }],
-        hero: ["48px", { lineHeight: "1.05", fontWeight: "700", letterSpacing: "-0.02em" }],
+        hero: ["34px", { lineHeight: "1.15", fontWeight: "600", letterSpacing: "-0.01em" }],
       },
       borderRadius: {
         card: "16px",
