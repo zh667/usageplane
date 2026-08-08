@@ -40,6 +40,24 @@ switch (command) {
   case "hooks":
     runHooks(process.argv[3])
     break
+  case "notify-chain": {
+    // Installed by `hooks install` when another tool already owns Codex's
+    // single notify slot: run our sync, then re-invoke the original command
+    // (everything after --then) with the payload Codex appended as last arg.
+    const rest = process.argv.slice(3)
+    const thenIdx = rest.indexOf("--then")
+    const original = thenIdx === -1 ? [] : rest.slice(thenIdx + 1)
+    if (original.length > 0) {
+      const { spawn } = await import("node:child_process")
+      try {
+        spawn(original[0], original.slice(1), { stdio: "ignore", detached: true }).unref()
+      } catch {
+        /* the foreign tool's failure must never block our sync */
+      }
+    }
+    await runSync({ quiet: true })
+    break
+  }
   case "doctor":
     runDoctor()
     break

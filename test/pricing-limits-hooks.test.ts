@@ -73,6 +73,24 @@ test("limits: codex windows classified by seconds, not slot position", async () 
   assert.equal(windows[0].resets_at, new Date(1_000_000 + 86400 * 1000).toISOString())
 })
 
+test("limits: codex monthly window (2628000s) labels 30d; reset_after_seconds and numeric reset_at accepted", async () => {
+  const { parseCodexUsageBody } = await import("../src/core/limits.js")
+  // Real Windows wham response shape (2026-08-08): monthly window, countdown
+  // in reset_after_seconds, absolute epoch in numeric reset_at.
+  const windows = parseCodexUsageBody(
+    {
+      rate_limit: {
+        primary_window: { used_percent: 16, limit_window_seconds: 2628000, reset_after_seconds: 3600 },
+        secondary_window: { used_percent: 5, limit_window_seconds: 18000, reset_at: 1_754_600_000 },
+      },
+    },
+    1_000_000,
+  )
+  assert.deepEqual(windows.map((w) => `${w.label}:${w.utilization}`), ["30d:16", "5h:5"])
+  assert.equal(windows[0].resets_at, new Date(1_000_000 + 3600 * 1000).toISOString())
+  assert.equal(windows[1].resets_at, new Date(1_754_600_000 * 1000).toISOString())
+})
+
 test("hooks: codex notify installs into config.toml, respects foreign settings", () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "usageplane-codexhook-"))
   const toml = path.join(home, ".codex", "config.toml")
@@ -90,10 +108,29 @@ test("hooks: codex notify installs into config.toml, respects foreign settings",
   assert.ok(!after.includes("notify"), "our line removed")
   assert.ok(after.includes('model = "gpt-5.4"'), "foreign content preserved")
 
-  // A foreign notify must never be overwritten.
-  fs.writeFileSync(toml, "notify = ['other-tool']\n")
+  // A foreign notify is chained (both tools run), never dropped — and
+  // uninstall hands the slot back to the original owner verbatim.
+  // Basic-string quoting with backslashes is the real TokenTracker-on-Windows shape.
+  fs.writeFileSync(toml, 'notify = ["E:\\\\tt\\\\node.exe", "C:\\\\Users\\\\x\\\\notify.cjs"]\n')
   runHooks("install", home)
-  assert.ok(fs.readFileSync(toml, "utf8").includes("other-tool"))
+  const chained = fs.readFileSync(toml, "utf8")
+  assert.ok(chained.includes("notify-chain") && chained.includes("--then"), "chain installed")
+  assert.ok(chained.includes("node.exe") && chained.includes("notify.cjs"), "foreign command preserved in chain")
+  runHooks("install", home)
+  assert.equal(fs.readFileSync(toml, "utf8"), chained, "chaining is idempotent")
+
+  runHooks("uninstall", home)
+  const restored = fs.readFileSync(toml, "utf8")
+  assert.ok(!restored.includes("usageplane"), "our part removed")
+  assert.ok(/notify = \['E:\\tt\\node\.exe', 'C:\\Users\\x\\notify\.cjs'\]/.test(restored), "foreign notify restored with unescaped paths")
+})
+
+test("hooks: parseTomlNotifyArray handles both TOML quote styles", async () => {
+  const { parseTomlNotifyArray } = await import("../src/commands/hooks.js")
+  assert.deepEqual(
+    parseTomlNotifyArray('notify = ["E:\\\\tt\\\\node.exe", \'C:\\Users\\x\\n.cjs\']'),
+    ["E:\\tt\\node.exe", "C:\\Users\\x\\n.cjs"],
+  )
 })
 
 test("hooks: install is idempotent, uninstall preserves foreign hooks", () => {

@@ -152,6 +152,15 @@ export async function claudeLimits(fetchFn: typeof fetch = fetch): Promise<Provi
 const CODEX_SESSION_WINDOW_SECONDS = 18000
 const CODEX_WEEKLY_WINDOW_SECONDS = 604800
 
+/** Unknown window sizes get a duration label (e.g. 2628000s ≈ one month → "30d")
+ *  instead of leaking internal slot names into the UI. */
+function windowLabel(seconds: number, slot: string): string {
+  if (seconds === CODEX_SESSION_WINDOW_SECONDS) return "5h"
+  if (seconds === CODEX_WEEKLY_WINDOW_SECONDS) return "7d"
+  if (!Number.isFinite(seconds) || seconds <= 0) return slot
+  return seconds >= 172800 ? `${Math.round(seconds / 86400)}d` : `${Math.round(seconds / 3600)}h`
+}
+
 function readCodexAuth(home = os.homedir()): { token: string; accountId: string | null } | null {
   try {
     const raw = JSON.parse(fs.readFileSync(path.join(home, ".codex", "auth.json"), "utf8")) as {
@@ -175,12 +184,22 @@ export function parseCodexUsageBody(body: Record<string, unknown>, nowMs = Date.
     const used = Number(w.used_percent)
     const seconds = Number(w.limit_window_seconds)
     if (!Number.isFinite(used)) continue
-    const label =
-      seconds === CODEX_SESSION_WINDOW_SECONDS ? "5h" : seconds === CODEX_WEEKLY_WINDOW_SECONDS ? "7d" : `${slot}`
+    const label = windowLabel(seconds, slot)
+    // Reset time arrives in several shapes across plan tiers: string resets_at,
+    // numeric reset_at/resets_at (epoch seconds or ms), or a countdown in
+    // resets_in_seconds / reset_after_seconds.
     let resetsAt: string | null = typeof w.resets_at === "string" ? w.resets_at : null
-    const resetsIn = Number(w.resets_in_seconds)
-    if (!resetsAt && Number.isFinite(resetsIn) && resetsIn > 0) {
-      resetsAt = new Date(nowMs + resetsIn * 1000).toISOString()
+    if (!resetsAt) {
+      const epoch = Number(w.resets_at ?? w.reset_at)
+      if (Number.isFinite(epoch) && epoch > 0) {
+        resetsAt = new Date(epoch > 1e12 ? epoch : epoch * 1000).toISOString()
+      }
+    }
+    if (!resetsAt) {
+      const resetsIn = Number(w.resets_in_seconds ?? w.reset_after_seconds)
+      if (Number.isFinite(resetsIn) && resetsIn > 0) {
+        resetsAt = new Date(nowMs + resetsIn * 1000).toISOString()
+      }
     }
     out.push({ label, utilization: Math.round(Math.max(0, Math.min(100, used))), resets_at: resetsAt })
   }

@@ -41,7 +41,7 @@
 
 - ✅ Codex 采集器（2026-08-07）：移植 codex-token-usage 增量状态机（逐行 1:1）+ rollout 事件循环；cached-input 减除、fork 重放双守卫（突发间隙 + 跨日）、跨改写/归档去重；6 个合成夹具测试过。**对拍验收待 Windows 真实日志**（本机无 Codex 数据；Windows 装好后 push 上来即可核对）
 - ✅ 多设备聚合（2026-08-07）：hub 模式——常开设备（VPS）`serve` 暴露 `POST /api/ingest`（Bearer 共享 token，无 token 配置则 403 拒收），卫星设备 `usageplane push`；幂等 upsert 免合并冲突。回环 E2E 验证双推不翻倍；dashboard/status 增加按设备分组视图
-- ⬜ Codex 对拍验收：Windows 装好后 push 真实日志上来核对（v0.2 唯一悬项）
+- ✅ Codex 对拍验收（2026-08-08，Windows 实测）：五个原始 token 分栏对 TT 生产账本 **全部误差 0**（全局+按模型）。唯一残差在 TT 存量账本的 `total_tokens` 列（-86,968，其自身也不等于自家分栏之和——TT 旧版本历史漂移）；脚本已改为分栏严格对拍 + 总数按公式重算，不再信任 TT 存储总数
 
 > **批次顺序（用户定，2026-08-07）：v0.4 用量侧对齐先做，云端三档（v0.3）后推。** 编号保留不改，按此顺序执行。
 
@@ -68,7 +68,7 @@
 - ✅ Skills 页（2026-08-08）：My Skills 列表——扫描各 agent 用户级技能目录、frontmatter 解析、同名跨 agent 合并成安装矩阵徽章、agent 筛选+搜索；与 TT 同机对照同为 11 skills。Browse tab 占位（依赖云端技能索引，随 v0.3）；管理操作（启停/删除）v0.5
 - ✅ 设置页（2026-08-07）：Appearance（主题三态/货币/数字格式，实测生效）、Account（设备名+hub 状态+登录占位）、Limits Display（%used/%left 偏好，供 Limits 页用）、版本页脚。语言项有意推迟——UI 未做 i18n 前放一个不生效的选择器是假设置（TT 对齐的例外按"上游有而我们暂缺基建"处理）
 - ✅ 成本估算引擎（2026-08-08）：移植 TT 定价表（67 模型 exact+alias+fuzzy 三级匹配）与 computeRowCost（分列计费、codex reasoning 不重复计费、未知模型计 0）；estimated 与 reported 永不相加
-- ✅ hooks 自动采集（2026-08-08）：`usageplane hooks install` 向 Claude Code settings.json 装 Stop 钩子——每次响应结束触发 `sync --quiet`（hub 已绑定则 sync 自动附带 push）；install 幂等、uninstall 保留他人钩子。VPS 已装。**Codex 钩子待 Windows 实测后补**（TT 的 codex hook 机制需在有 Codex 的机器上验证）
+- ✅ hooks 自动采集（2026-08-08）：`usageplane hooks install` 向 Claude Code settings.json 装 Stop 钩子——每次响应结束触发 `sync --quiet`（hub 已绑定则 sync 自动附带 push）；install 幂等、uninstall 保留他人钩子。VPS 已装。Codex notify 钩子已实现并 Windows 实测（含与 TT 的链式共存，见补课清单）
 - ✅ 隐私加固（2026-08-08，回应用户隐私拷问）：会话标题带 `title_source` 溯源——content 衍生（用户首句）的标题**永不出设备**（入库前置空），仅 agent 生成的标题参与 hub 同步；`hub.sync_sessions: false` 可整体关闭会话同步
 - 后备（本批次未排）：项目归属升级 git-root、Cursor/Gemini 采集器
 
@@ -85,12 +85,12 @@
 
 ## 补课清单（跨批次悬项，防遗忘）
 
-代码全部就绪（2026-08-08），验证需 Windows 实机执行：
+Windows 实机四连验证已跑（2026-08-08），结果与后续动作：
 
-- 🔨 **Codex 对拍验收**（v0.2 唯一悬项）：`scripts/compare-codex-tokentracker.mts` 已写——对照物选 TT 自己的生产账本（queue.jsonl 按键取末条），不猜其内部 API。**Windows 上跑一次，token 各列误差 0 即关账**
-- 🔨 **Codex 限额抓取**：wham/usage 已实现（Bearer + ChatGPT-Account-Id、按 limit_window_seconds 分类窗口、120s 缓存 + 退避、401/403/404 中性处理）；auth 读 `~/.codex/auth.json` tokens.access_token。**待 Windows 实测**
-- 🔨 **Codex 钩子**：config.toml notify 机制已实现（TOML 字面量单引号免 Windows 路径转义、只增删含 usageplane 的行、外来 notify 绝不覆盖）；`hooks install` 一并安装两种钩子。**待 Windows 实测**
-- 🔨 **Windows Claude 限额凭证排查**：新增 `usageplane doctor` 诊断命令（数据源/凭证存在性/配置一屏打印，永不输出凭证内容）。**Windows 跑一次贴输出即可定位**
+- ✅ **Codex 对拍验收**：关账（见 v0.2 批次记录）
+- ✅ **Codex 限额抓取**：Windows 实测连通，利用率 16%。真实响应暴露了新形态并已补齐：`limit_window_seconds=2628000`（月窗口，标签 30d，未知秒数通用降级为时长标签）、`reset_after_seconds` 倒计时、数字型 `reset_at`（epoch 秒/毫秒自适应）
+- ✅ **Codex 钩子**：保护逻辑实测生效（TT 占用 notify 时不覆盖）。因 notify 是单值槽位，新增**链式共存**：`hooks install` 遇外来 notify 改写为 `usageplane notify-chain --then <原命令…>`——先跑我们的 sync，再原样转发 payload 调起原命令；uninstall 把槽位原样归还。**Windows 需重跑一次 `hooks install` 启用链式**
+- 🔨 **Windows Claude 限额凭证排查**：doctor 实测 `~/.claude/.credentials.json` 在 Windows 上不存在（但 Claude Code 正常使用、45 个日志文件）——凭证存放位置与 Linux 不同，待探查实际位置后适配 `readClaudeAccessToken`。在此之前 Windows 端 Claude 限额不可用（其余功能不受影响）
 
 ## v2 — 观望区（明确不承诺）
 
@@ -114,3 +114,6 @@
 | 2026-08-07 | 聚合通道排序（用户定）：**云端（公网 HTTPS hub）为首选，SSH 隧道为备用**。依据：TokenTracker 官方云端远程实测有问题；自托管云端数据仍在自己机器上。应用层协议不变，只是传输暴露方式升级 |
 | 2026-08-07 | **定位下修门槛（用户定）：默认假设用户没有 VPS** → 云端模式必须提供官方托管 hub（多租户 SaaS，TokenTracker 模式），自托管 hub 降为"数据主权档"可选项。项目方承担托管的成本/在线率/数据保管责任 |
 | 2026-08-07 | 隐私边界修订（用户定）：会话**元数据**（标题/计数/时长，正文永不）纳入 hub 同步——hub 是用户自己的服务器，跨设备浏览会话列表是核心诉求。官方托管 hub 时代此项必须转 opt-in。新增 `pull` 命令使任何设备可呈现全量视图 |
+| 2026-08-08 | Codex 对拍口径定案：验收只对五个原始分栏，`total_tokens` 按共享公式（分栏和，reasoning 折入 output）双侧重算——Windows 实测证明 TT 存量账本的存储总数与其自身分栏不一致（旧版漂移），不可作为对照物 |
+| 2026-08-08 | Codex notify 冲突处理：从"外来 notify 绝不覆盖（跳过安装）"升级为**链式共存**——包装为 `notify-chain --then <原命令>`，两个工具都跑，uninstall 原样归还。"绝不丢弃外来配置"的原则不变，实现从回避改为兼容 |
+| 2026-08-08 | 中转站侧无插件可行性结论：AAH 特殊功能九成走站点 HTTP API（含 new-api 家族签到端点 `/api/user/checkin`），CLI/服务端可实现；插件独占的只有登录态自动捕获（我们用粘贴 token 替代）与页面注入（不追）；纯 cookie 站签到降级为 cookie 粘贴/无头浏览器/放弃三级 |
