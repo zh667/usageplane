@@ -6,14 +6,31 @@ Guidance for Claude Code working in this repository. Every line here is loaded i
 
 UsagePlane — a local-first control plane for AI coding usage, subscription limits, and relay account assets（跨设备 AI 用量 + 多中转站资产的统一控制台）。
 
-- `src/cli.ts` — CLI 入口（命令名 `usageplane`）
-- `src/collectors/` — 客户端日志采集器（Claude Code、Codex 等），移植目标：TokenTracker `src/lib/`
-- `src/relays/` — 中转站适配器（new-api/one-api 家族等），移植目标：all-api-hub `src/services/apiService/`
-- `src/core/` — 统一数据模型与本地存储（数据目录 `~/.usageplane`，配置 `usageplane.yaml`）
-- `src/server/` — 本地 HTTP API，供 `dashboard/` 使用
-- `dashboard/` — Web 面板（未开始）
+**Status: v0.1/v0.2/v0.4 完成、v0.5 进行中，双设备（VPS+Windows）生产运行。** 架构见 `docs/ARCHITECTURE.md`，进度与决策日志见 `docs/ROADMAP.md`（完成任务后更新状态标记）。
 
-**Status: skeleton — 尚无可运行代码。** 架构见 `docs/ARCHITECTURE.md`，当前做到哪一步看 `docs/ROADMAP.md`（完成任务后更新状态标记）。
+### 要做…去哪里（What's where）
+
+| 要做… | 看这里 |
+|---|---|
+| 加/改用量采集器 | `src/collectors/`（新增前先用 `.claude/skills/port-collector`）|
+| 加/改中转站适配器 | `src/relays/common/`（先读 `docs/relay-sites.md` 谱系）|
+| 加本地 API 端点 | `src/server/index.ts`（文件系统写端点必须挂 `rejectNonLocalWrite`）|
+| 订阅限额 | `src/core/limits.ts`（缓存+退避是载荷级，端点与 Claude Code 共享配额）|
+| 会话/技能/限额跨设备同步 | `device_state`：`sync.ts` 写入、`push/pull` 快照语义传播 |
+| Skills 扫描/链接管理/发现安装 | `src/core/skills.ts` / `skill-links.ts` / `skill-discover.ts` |
+| 定价 | `src/core/pricing-data.ts` + `computeRowCost`（分列计费）|
+| 面板页面 | `dashboard/src/pages/`（oai 设计令牌在 `tailwind.config.cjs`）|
+
+### 常用命令与双机验证
+
+```bash
+npm install && npm run build   # workspaces：一并装 dashboard 依赖并构建前后端
+npm test                       # node:test 全套（Windows 也必须真实跑出计数）
+node bin/usageplane.js serve   # 必须从项目根启动（bin 相对路径）；VPS :7690
+npx tsx scripts/compare-claude-tokentracker.mts   # 与 TT 对拍（codex 版在 Windows 跑）
+```
+
+双机验证循环（每批交付后）：VPS 改完 → commit/push → Windows `git pull; npm install; npm run build` → 实测回报。7690=VPS 后端、7691=Windows 本机 serve（SSH 隧道下 localhost:7690 是 VPS）。
 
 ## Upstream provenance（载荷级约定）
 
@@ -31,6 +48,8 @@ UsagePlane — a local-first control plane for AI coding usage, subscription lim
 **假设我们的用户就是 TokenTracker 和 All API Hub 的用户。** 用量侧的一切（功能、页面、UX、机制、数据来源）默认答案在 TokenTracker 里；中转站侧默认答案在 all-api-hub 里。动手设计前先侦察上游怎么做的：读源码 + 实跑对照（TokenTracker 可在本机跑起来并排对比，`node bin/tracker.js serve --no-sync` → :7680）。自创设计只允许两种情况：上游没有该功能，或与我们独有定位（用量+资产缝合层、数据主权分档）冲突。逐功能台账：`docs/FEATURE-MAP.md`。
 
 引以为戒的三次返工：自动采集提议 cron → 上游用 **hooks**（init 装进 AI 工具配置，事件驱动）；云端 UX 让用户手配反代 → 上游是 **device-login 命令流**（运维包进命令）；Codex 会话标题从内容拼 → 上游读 **session_index.jsonl**（agent 自写的元数据）。共性：先问"TokenTracker/AAH 是怎么做的"，再动键盘。
+
+**上游代码为准，文档可能过时**：AAH 自己的 AGENTS.md 就写错过目录名（common/ 实为 newApiFamily/）。侦察时读源码，不引用它们的文档结论。
 
 ### 审计项校准（载荷级——防审计驱动的过度设计）
 
@@ -75,6 +94,19 @@ total_tokens                = 以上各列之和 + output_tokens
 - Git 提交英文、conventional style（`feat:` / `fix:` / `docs:` / `chore:` / `test:`）。
 - 环境变量前缀 `USAGEPLANE_`。
 
+## 实测中踩过的坑（read before touching）
+
+- **cmd.exe 不认单引号 glob**：npm scripts 里的路径模式必须双引号，否则 Windows 上 0 tests 假绿。
+- **测试夹具建链接恒用 `symlinkSync(…, "junction")`**：类型在 Unix 被忽略、在 Windows 免管理员——`"dir"` 类型会 EPERM 假失败/假跳过。
+- **`chmod` 在 Windows 是空操作**：故障注入用"目标路径放目录"这类跨平台手段，不用权限位。
+- **fetch 禁止覆盖 Host 头**（undici 静默忽略）：测 Host 相关防护必须用原生 `http.request`。
+- **serve 必须从项目根启动**：bin 相对路径，从别处 nohup 会秒退。
+- **device_state 是快照不是流水账**：push 只传本机 + 声明组、hub 按组整体替换、pull 对他机整体替换——改同步链路前先读 ROADMAP 2026-08-08 该决策。
+- **动 collectors/store 迁移后连跑两次 `sync`**：第二次会暴露第一次掩盖的状态污染（TT 的教训，我们的幂等 upsert 同样适用）。
+
 ## Domain knowledge
 
 中转站家族谱系（one-api → new-api → Veloera…，哪些不兼容）与上游仓库列表：`docs/relay-sites.md`。写适配器前先读它，不要凭记忆猜站点行为。
+
+- **端点契约写进适配器注释**（AAH 规则）：凡行为依赖外部后端的具体表现——认证格式、envelope、单位换算、分页参数、不支持的能力——在相应代码旁注明来源（上游仓库/实测部署）与契约要点。
+- **用户报告的站点行为与我们不符时，先问部署/分支/版本**（AAH 规则）：中转站分叉繁多，别急着断定适配器写错了。
