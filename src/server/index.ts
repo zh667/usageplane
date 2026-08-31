@@ -224,6 +224,9 @@ export function createServer(dir = dataDir(), homeDir = os.homedir()): http.Serv
     try {
       if (url.pathname === "/api/usage") {
         const range = url.searchParams.get("range") ?? "month"
+        // Device filter (""=all). Every range aggregate below is scoped to it;
+        // the `devices` list itself is not, so the card can switch or clear.
+        const device = url.searchParams.get("device") ?? ""
         let since: string | null
         let until: string | null = null
         if (range === "custom") {
@@ -247,7 +250,7 @@ export function createServer(dir = dataDir(), homeDir = os.homedir()): http.Serv
         }
         const store = new Store(dbPath(dir))
         try {
-          const summary = store.rangeSummary(since, until)
+          const summary = store.rangeSummary(since, until, device)
           const models = summary.models.map((m) => ({ ...m, estimated_cost: computeRowCost(m) }))
           const estimatedCost = models.reduce((s, m) => s + m.estimated_cost, 0)
           // Fold (project, tool, model) groups into per-project rows; cost is
@@ -293,14 +296,29 @@ export function createServer(dir = dataDir(), homeDir = os.homedir()): http.Serv
             p.estimated_cost += computeRowCost(g)
           }
           const projects = [...projectMap.values()].sort((a, b) => b.total_tokens - a.total_tokens)
-          const last7d = store.rangeSummary(new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString()).totals
-          const last30d = store.rangeSummary(new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString()).totals
-          const span = store.activitySpan()
+          // Same folding rule as projects: price each (device, tool, model)
+          // group, then sum — never price from a device's total_tokens.
+          const deviceMap = new Map<string, { device_id: string; total_tokens: number; conversation_count: number; estimated_cost: number }>()
+          for (const g of store.deviceModelTotals(since, until)) {
+            const key = g.device_id || "unknown"
+            const d =
+              deviceMap.get(key) ??
+              deviceMap.set(key, { device_id: key, total_tokens: 0, conversation_count: 0, estimated_cost: 0 }).get(key)!
+            d.total_tokens += g.total_tokens
+            d.conversation_count += g.conversation_count
+            d.estimated_cost += computeRowCost(g)
+          }
+          const devices = [...deviceMap.values()].sort((a, b) => b.total_tokens - a.total_tokens)
+          const last7d = store.rangeSummary(new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString(), null, device).totals
+          const last30d = store.rangeSummary(new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString(), null, device).totals
+          const span = store.activitySpan(device)
           const { project_models: _pm, ...summaryOut } = summary
           json(res, 200, {
             ...summaryOut,
             models,
             projects,
+            devices,
+            self_device: loadConfig(dir).device,
             estimated_cost: estimatedCost,
             last7d: last7d.total_tokens,
             last30d: last30d.total_tokens,
@@ -526,7 +544,7 @@ export function createServer(dir = dataDir(), homeDir = os.homedir()): http.Serv
       if (url.pathname === "/api/heatmap") {
         const store = new Store(dbPath(dir))
         try {
-          json(res, 200, store.heatmapDays())
+          json(res, 200, store.heatmapDays(url.searchParams.get("device") ?? ""))
         } finally {
           store.close()
         }

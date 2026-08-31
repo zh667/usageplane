@@ -81,6 +81,7 @@
 - ✅ Discover 审计第四轮（2026-08-08）：①重装同 key 改 no-op——回滚无法区分本次与既有链接，晚期失败会毁掉先前安装；更新功能待 blob-SHA 签名实现②卸载事务化——注册表先行提交（写失败零改动），磁盘清理失败恢复记录，Browse 的 Installed 永远与现实一致③下载限额流式化——超限 Content-Length 直接拒、逐块累计越过预算立即 cancel，不再先整段入内存④测试 glob 双引号——cmd.exe 下不再 0 tests 假绿⑤故障注入改跨平台 tmp 占位（chmod 在 Windows 是空操作）。**第五轮审计零 P 级、Windows 双 shell 92/92，Discover 第二刀正式关账**（2026-08-08）；校准规则首轮生效——审查方自行对照 TT@main 将唯一发现归为超标建议。其中文案准确性子项按"成本≈0"例外已修（恢复失败时如实报告）；完整文件系统事务与更新/回收站机制一并设计（第三刀）
 - ✅ 视觉重构批次（2026-08-08，GitHub 风格校准）：P0 固定应用壳（h-dvh 文档禁滚、220px 侧栏常驻+导航独立滚动、主区唯一滚动区）+ GitHub Primer 令牌换肤（中性色/交互蓝/语义色亮暗两套灌入原 oai-* 类名、6px 圆角、H1 30px、KPI 上限 56px、淡绿画布保留为品牌识别）+ 控件语义化（up-seg/up-btn/up-input，rounded-full 仅限状态标签与真 segmented）；P1 四页——Tokens 12 栅格 4/8+1680 上限+表格卡内滚动 sticky 头、Sessions 1200 上限+品牌图标+32px 终端 Copy 钮、Limits 两列 Provider+进度限宽+已连接优先、Skills Agent 图标矩阵（装=品牌色/未装=淡化，行列对齐）+Browse 3/2/1 等高卡片栅格；ProviderIcon 注册表移植自 TT（MIT，@lobehub mono 内联），三页共用。验收：四档视口×五页 doc==viewport、桌面滚底侧栏不动、暗色完好、92/92
 - ✅ 热力图重建（2026-08-08，实测报告三根因全修）：①活跃格透明——组件引用被换肤删除的 bg-brand-200/300，改为上游五档实色（亮暗各一套，永不依赖框架色令牌）②分级从"值/全局最大"改为上游 P50/P75/P90 分位（单峰值不再压扁其他活跃日）③26 周 1fr 自适应改为周日对齐 52×7 UTC 矩阵、12px 格/3px 距、月份+星期标签、Less/More 图例、初载滚至最新、未来日不渲染。纯函数库 activity-heatmap.js 先测后写（6 用例）；四档视口×双主题实测零透明活跃格、仅卡内滚动。**教训入账：视觉令牌重构时必须全库检索被删令牌的引用**
+- ✅ 设备维度上页（2026-09-01）：Tokens 页 DEVICES 卡片——侦察上游后照 TT `DeviceUsageCard` 语义落地（重的设备在前、范围内零用量设备隐藏、行本身即整页过滤器、Clear 回合并视图、本机徽章），位置也按上游左栏顺序放在热力图之后。后端 `/api/usage` 新增 `devices`（按 (device,tool,model) 分组定价后归并，Σ设备==范围总计、Σ成本==页面成本，实测精确相等）与 `self_device`，`?device=` 过滤 totals/tools/models/days/projects/active_days，`/api/heatmap?device=` 同步跟随（否则日历会与页面其他数字自相矛盾）；设备列表本身不受过滤影响，否则过滤后无法切换。hero 在过滤时标注 `TOTAL TOKENS · <设备>`，避免把单设备数读成全量。**上游对照结论**：TT 的 `DevicePage` 是 OAuth 设备流页面，与用量无关，不是"设备页"的先例
 - 后续 UI 批次（审计待排）：语言统一待 i18n 基建
 - 后备（本批次未排）：项目归属升级 git-root、Cursor/Gemini 采集器
 
@@ -102,6 +103,7 @@ Windows 实机四连验证已跑（2026-08-08），结果与后续动作：
 - ✅ **Codex 对拍验收**：关账（见 v0.2 批次记录）
 - ✅ **Codex 限额抓取**：Windows 实测连通，利用率 16%。真实响应暴露了新形态并已补齐：`limit_window_seconds=2628000`（月窗口，标签 30d，未知秒数通用降级为时长标签）、`reset_after_seconds` 倒计时、数字型 `reset_at`（epoch 秒/毫秒自适应）
 - ✅ **Codex 钩子**：保护逻辑实测生效（TT 占用 notify 时不覆盖）。因 notify 是单值槽位，新增**链式共存**：`hooks install` 遇外来 notify 改写为 `usageplane notify-chain --then <原命令…>`——先跑我们的 sync，再原样转发 payload 调起原命令；uninstall 把槽位原样归还。**Windows 需重跑一次 `hooks install` 启用链式**
+- ✅ **Windows 推送断流根治**（2026-09-01）：hub 库里 Windows 数据停在 2026-08-17T15:30Z（14 天），根因是钩子每次 `sync --quiet` 推的是 `127.0.0.1:7690`——SSH 隧道一断，推送静默失败而钩子照常返回成功。`scripts/windows-tunnel.ps1` 把隧道做成开机计划任务（`-Install`/`-Uninstall`/`-Status`，断线 10s 重连、`ExitOnForwardFailure`+`ServerAliveInterval` 防僵尸转发、`BatchMode` 防隐藏窗口卡在密码提示、日志 1MB 截断、秒退给端口占用/密钥提示）。Linux 侧已跑通重连循环与 pwsh 解析；**计划任务注册与 -Status 待 Windows 实测**
 - ✅ **Windows Claude 限额凭证排查**（2026-08-08 定性）：上游侦察确认 TT 的 `readClaudeCodeAccessToken` 在 Windows 读的就是同一个 `~/.claude/.credentials.json`（darwin 才走 Keychain），无第三位置——我们已对齐，无需适配。该机文件确实不存在且凭据管理器无 claude 条目 → 判定该 Windows 的 Claude Code 走 API key/中转站认证（此模式不产生订阅 OAuth，限额窗口对该机本就不存在，"Not connected" 是正确显示）。doctor 增加鉴别提示（检测 env/settings.json 中 ANTHROPIC_* / apiKeyHelper 字段名，永不读值）。合并视图下 Windows 仍可经 pull 看到 VPS 的 Claude 限额
 
 ## v2 — 观望区（明确不承诺）
@@ -132,3 +134,5 @@ Windows 实机四连验证已跑（2026-08-08），结果与后续动作：
 | 2026-08-08 | device_state 同步语义定案（Windows 实测发现旧键残留后）：状态是**快照**不是流水账——push 只上传本机状态并携带 `state_device`+`state_kinds` 声明，hub 按 (device,kind) 组整体替换（空组也传播删除）；pull 对他机状态以 hub 为权威整体替换，本机状态始终本地权威。此前 push 会把 pull 来的他机旧行回灌 hub（污染放大器），已一并堵住；旧客户端无声明时回退 upsert |
 | 2026-08-08 | Skills 扫描重做（Windows 实测暴露 4 处漏扫后侦察上游定案）：junction/symlink 判定、`.agents` 共享根、插件缓存盘点、深度 3 分组全部照搬 TT skills-manager；`.system` 点目录排除与 `~/.skills` 不扫描均为对齐上游的有意行为。设备来源从"本机隐含"改为显式 installs 矩阵——修复"两台设备看同一技能徽章不一致"的误导 |
 | 2026-08-08 | 中转站侧无插件可行性结论：AAH 特殊功能九成走站点 HTTP API（含 new-api 家族签到端点 `/api/user/checkin`），CLI/服务端可实现；插件独占的只有登录态自动捕获（我们用粘贴 token 替代）与页面注入（不追）；纯 cookie 站签到降级为 cookie 粘贴/无头浏览器/放弃三级 |
+| 2026-09-01 | 聚合通道保持"hub 绑 127.0.0.1 + SSH 隧道"，隧道改为 Windows 登录计划任务常驻，**不改绑定**：绑到 tailnet 会让写端点（Skills 安装/启停走回环 Host 白名单）在远端页面上降级为只读，而该机 tailscale 常离线；断流是运维问题，用运维手段解决，不动数据面设计 |
+| 2026-09-01 | 设备维度放在 Tokens 页而非独立页（用户定）：上游 TT 的设备卡就在 Dashboard 左栏（`DevicePage` 是 OAuth 设备流，不是用量页），且"合计 + 点开单设备"一屏内切换比跳页更贴合"看两台机器总量"的原始需求；成本仍按 (device,tool,model) 分组定价后归并，绝不从设备 `total_tokens` 反推 |

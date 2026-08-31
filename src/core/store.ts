@@ -254,18 +254,15 @@ export class Store {
   }
 
   /**
-   * Aggregates for a time range (hour_start >= since, and < until when given;
-   * null since = all time). Shapes match the dashboard's usage page needs.
+   * WHERE clause shared by every range query. `device` narrows to one device
+   * ("" = every device) — the dashboard's device filter, mirroring
+   * TokenTracker's DashboardPage deviceId scope.
    */
-  rangeSummary(since: string | null, until?: string | null): {
-    totals: FullTotals
-    tools: (ToolTotals & { cached_input_tokens: number })[]
-    models: (ModelTotals & FullTotals)[]
-    days: FullDayTotals[]
-    /** Grouped at (project, tool, model) so per-project cost can be priced
-     *  per model and then folded — cost is never computable from totals. */
-    project_models: ({ project: string; tool: string; model: string } & FullTotals)[]
-  } {
+  private rangeWhere(
+    since: string | null,
+    until?: string | null,
+    device?: string | null,
+  ): { where: string; params: string[] } {
     const clauses: string[] = []
     const params: string[] = []
     if (since) {
@@ -276,7 +273,30 @@ export class Store {
       clauses.push("hour_start < ?")
       params.push(until)
     }
-    const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : ""
+    if (device) {
+      clauses.push("device_id = ?")
+      params.push(device)
+    }
+    return { where: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "", params }
+  }
+
+  /**
+   * Aggregates for a time range (hour_start >= since, and < until when given;
+   * null since = all time). Shapes match the dashboard's usage page needs.
+   * `device` scopes every aggregate to one device; the device *list* itself
+   * comes from `deviceModelTotals`, which stays unscoped so the filter can be
+   * switched or cleared from the card.
+   */
+  rangeSummary(since: string | null, until?: string | null, device?: string | null): {
+    totals: FullTotals
+    tools: (ToolTotals & { cached_input_tokens: number })[]
+    models: (ModelTotals & FullTotals)[]
+    days: FullDayTotals[]
+    /** Grouped at (project, tool, model) so per-project cost can be priced
+     *  per model and then folded — cost is never computable from totals. */
+    project_models: ({ project: string; tool: string; model: string } & FullTotals)[]
+  } {
+    const { where, params } = this.rangeWhere(since, until, device)
     const cols = `
       SUM(input_tokens) AS input_tokens,
       SUM(output_tokens) AS output_tokens,
@@ -308,25 +328,53 @@ export class Store {
     }
   }
 
-  /** Per-day grand totals for the heatmap (last ~54 weeks). */
-  heatmapDays(): { day: string; total_tokens: number }[] {
+  /**
+   * Range totals grouped at (device, tool, model) so per-device cost can be
+   * priced per model and then folded — cost is never computable from totals.
+   * Deliberately NOT device-filtered: the card lists every device that has
+   * usage in the range, including the ones the filter is hiding elsewhere.
+   */
+  deviceModelTotals(
+    since: string | null,
+    until?: string | null,
+  ): ({ device_id: string; tool: string; model: string } & FullTotals)[] {
+    const { where, params } = this.rangeWhere(since, until)
+    return this.db
+      .prepare(`
+        SELECT device_id, tool, model,
+               SUM(input_tokens) AS input_tokens,
+               SUM(output_tokens) AS output_tokens,
+               SUM(cached_input_tokens) AS cached_input_tokens,
+               SUM(cache_creation_input_tokens) AS cache_creation_input_tokens,
+               SUM(reasoning_output_tokens) AS reasoning_output_tokens,
+               SUM(total_tokens) AS total_tokens,
+               SUM(conversation_count) AS conversation_count
+        FROM usage_records ${where} GROUP BY device_id, tool, model
+      `)
+      .all(...params) as ({ device_id: string; tool: string; model: string } & FullTotals)[]
+  }
+
+  /** Per-day grand totals for the heatmap (last ~54 weeks), optionally one device. */
+  heatmapDays(device?: string | null): { day: string; total_tokens: number }[] {
+    const { where, params } = this.rangeWhere(null, null, device)
     return this.db
       .prepare(`
         SELECT substr(hour_start, 1, 10) AS day, SUM(total_tokens) AS total_tokens
-        FROM usage_records GROUP BY day ORDER BY day DESC LIMIT 378
+        FROM usage_records ${where} GROUP BY day ORDER BY day DESC LIMIT 378
       `)
-      .all() as { day: string; total_tokens: number }[]
+      .all(...params) as { day: string; total_tokens: number }[]
   }
 
   /** First recorded bucket start and count of distinct active days. */
-  activitySpan(): { started: string | null; active_days: number } {
+  activitySpan(device?: string | null): { started: string | null; active_days: number } {
+    const { where, params } = this.rangeWhere(null, null, device)
     return this.db
       .prepare(`
         SELECT MIN(hour_start) AS started,
                COUNT(DISTINCT substr(hour_start, 1, 10)) AS active_days
-        FROM usage_records
+        FROM usage_records ${where}
       `)
-      .get() as { started: string | null; active_days: number }
+      .get(...params) as { started: string | null; active_days: number }
   }
 
   /** Per-device totals — the cross-device home view. */

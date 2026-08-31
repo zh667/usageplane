@@ -426,3 +426,54 @@ test("origin must match the request authority exactly: null and other loopback p
     server.close()
   }
 })
+
+test("/api/usage devices: per-device rows sum to range totals; ?device scopes the page but not the list", async () => {
+  const dir = seededDir()
+  // Second device, one bucket inside the same range as the seed's 08-07 row.
+  const store2 = new Store(path.join(dir, "usageplane.db"))
+  store2.upsertUsage([
+    {
+      device_id: "laptop", tool: "codex", project: "proj-c", source_kind: "unknown",
+      model: "gpt-5.4", hour_start: "2026-08-07T12:00:00.000Z",
+      input_tokens: 3, output_tokens: 4, cached_input_tokens: 0,
+      cache_creation_input_tokens: 0, reasoning_output_tokens: 0,
+      total_tokens: 7, conversation_count: 1,
+    },
+  ])
+  store2.close()
+  await withServer(dir, async (base) => {
+    const all = await fetch(`${base}/api/usage?range=total`).then((r) => r.json())
+    assert.deepEqual(
+      all.devices.map((d: { device_id: string }) => d.device_id).sort(),
+      ["laptop", "test"],
+    )
+    const sum = all.devices.reduce((s: number, d: { total_tokens: number }) => s + d.total_tokens, 0)
+    assert.equal(sum, all.totals.total_tokens, "device rows sum to the range total")
+    for (const d of all.devices) assert.equal(typeof d.estimated_cost, "number")
+
+    // Filtered: every aggregate narrows to that device…
+    const one = await fetch(`${base}/api/usage?range=total&device=laptop`).then((r) => r.json())
+    assert.equal(one.totals.total_tokens, 7)
+    assert.deepEqual(one.tools.map((t: { tool: string }) => t.tool), ["codex"])
+    assert.deepEqual(one.projects.map((p: { project: string }) => p.project), ["proj-c"])
+    assert.equal(one.days.length, 1)
+    assert.equal(one.active_days, 1)
+    // …but the device list stays complete, so the filter can be switched/cleared.
+    assert.equal(one.devices.length, 2)
+    assert.equal(
+      one.devices.reduce((s: number, d: { total_tokens: number }) => s + d.total_tokens, 0),
+      all.totals.total_tokens,
+    )
+
+    // Unknown device → empty page, list still intact (no 500, no silent all-devices fallback).
+    const none = await fetch(`${base}/api/usage?range=total&device=nope`).then((r) => r.json())
+    assert.equal(none.totals.total_tokens, 0)
+    assert.equal(none.devices.length, 2)
+
+    // Heatmap honours the same filter.
+    const heatAll = await fetch(`${base}/api/heatmap`).then((r) => r.json())
+    const heatOne = await fetch(`${base}/api/heatmap?device=laptop`).then((r) => r.json())
+    assert.equal(heatAll.reduce((s: number, d: { total_tokens: number }) => s + d.total_tokens, 0), all.totals.total_tokens)
+    assert.deepEqual(heatOne, [{ day: "2026-08-07", total_tokens: 7 }])
+  })
+})

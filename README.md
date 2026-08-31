@@ -6,7 +6,7 @@ A local-first control plane for AI coding usage, subscription limits, and relay 
 
 一个本地优先的 AI 用量控制台，统一管理本机、VPS、官方订阅和多个 API 中转站。
 
-> ⚠️ Status: early skeleton — nothing works yet. Design notes in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+> Status: v0.1/v0.2/v0.4 done, v0.5 in progress — running across two devices (VPS hub + Windows satellite). Design notes in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), progress in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## What it will do
 
@@ -47,7 +47,16 @@ hub:
   token: <同一个共享密钥>
 ```
 
-然后在卫星设备上 `usageplane sync && usageplane push`——hub 的 dashboard 即出现按设备分组的合并视图。重复 push 安全（幂等 upsert）。
+然后在卫星设备上 `usageplane sync && usageplane push`——hub 的 dashboard 即出现按设备分组的合并视图（Tokens 页 DEVICES 卡片：点某台机器把整页过滤到它，Clear 回合并）。重复 push 安全（幂等 upsert）。
+
+hub 只监听回环，所以卫星设备经 SSH 隧道连它。隧道断了推送会静默失败（钩子照常返回成功），Windows 上把它做成开机任务：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\windows-tunnel.ps1 -Install   # 登录即建隧道，断线自动重连
+powershell -ExecutionPolicy Bypass -File .\scripts\windows-tunnel.ps1 -Status    # 任务状态 + 端口 + hub 现在替哪些设备存着数据
+```
+
+本机若已有 `usageplane serve` 占着 7690，用 `-LocalPort 7691` 换个端口再开浏览器。
 
 ## Acknowledgements
 

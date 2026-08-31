@@ -61,6 +61,76 @@ function SortableHeader({ col, label, numeric, sort, onSort }) {
   )
 }
 
+/**
+ * Cross-device split. Semantics mirror TokenTracker's DeviceUsageCard:
+ * heaviest device first, devices idle in the range hidden, and the row itself
+ * toggles a page-wide filter (click again — or Clear — for the merged view).
+ * Rendered only with 2+ devices: with one device it would restate the page
+ * total. Ported semantics from TokenTracker dashboard DeviceUsageCard (MIT).
+ */
+function DevicesCard({ devices, selfDevice, selected, onSelect }) {
+  const rows = (devices ?? []).filter((d) => d.total_tokens > 0)
+  // Denominator is the card's own rows, so shares stay stable while a filter
+  // narrows the rest of the page.
+  const total = Math.max(1, rows.reduce((s, d) => s + d.total_tokens, 0))
+  if (rows.length < 2) return null
+  return (
+    <section className="up-card p-5">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-[12px] font-semibold tracking-wide text-oai-gray-500">DEVICES</h3>
+        {selected && (
+          <button
+            onClick={() => onSelect("")}
+            className="text-[11px] text-oai-gray-400 hover:text-oai-black dark:hover:text-oai-white"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+      <div className="space-y-1">
+        {rows.map((d) => {
+          const pct = (d.total_tokens / total) * 100
+          const active = selected === d.device_id
+          return (
+            <button
+              key={d.device_id}
+              onClick={() => onSelect(active ? "" : d.device_id)}
+              aria-pressed={active}
+              title={`${d.device_id} · ${d.conversation_count} convs · est. $${(d.estimated_cost ?? 0).toFixed(2)}`}
+              className={`w-full rounded-md px-2 py-1.5 text-left transition-colors ${
+                active ? "bg-oai-gray-100 dark:bg-oai-gray-800" : "hover:bg-oai-gray-50 dark:hover:bg-oai-gray-800/40"
+              }${selected && !active ? " opacity-50 hover:opacity-80" : ""}`}
+            >
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="flex min-w-0 items-baseline gap-2">
+                  <span className="truncate text-[13px]">{d.device_id}</span>
+                  {d.device_id === selfDevice && (
+                    <span className="shrink-0 rounded-full bg-oai-gray-100 px-1.5 py-0.5 text-[10px] text-oai-gray-500 dark:bg-oai-gray-800">
+                      本机
+                    </span>
+                  )}
+                </span>
+                <span className="shrink-0 text-[13px] font-semibold tabular-nums">
+                  {fmt(d.total_tokens)}
+                  <span className="font-normal text-oai-gray-400"> · {pct.toFixed(1)}%</span>
+                </span>
+              </div>
+              <div className="mt-1.5 h-[2px] overflow-hidden rounded-full bg-oai-gray-100 dark:bg-oai-gray-800">
+                <div
+                  className={`h-full rounded-full ${
+                    !selected || active ? "bg-brand-600" : "bg-oai-gray-300 dark:bg-oai-gray-600"
+                  }`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
 /** Table display keeps the short project name; the full path lives in title. */
 const shortProject = (p) => (p === "unknown" || !p ? "Unknown" : p.split(/[\\/]/).filter(Boolean).pop() || p)
 
@@ -76,17 +146,29 @@ export default function TokensPage() {
   const [sort, setSort] = useState({ key: "day", dir: "desc" })
   const [projSort, setProjSort] = useState({ key: "total_tokens", dir: "desc" })
   const [toolDetail, setToolDetail] = useState(null)
+  const [device, setDevice] = useState("")
   const [err, setErr] = useState(null)
 
   // Custom waits until both bounds are picked; other ranges fetch directly.
+  const deviceQ = device ? `&device=${encodeURIComponent(device)}` : ""
   const query =
-    range === "custom" ? (from && to && from <= to ? `range=custom&from=${from}&to=${to}` : null) : `range=${range}`
+    range === "custom"
+      ? from && to && from <= to
+        ? `range=custom&from=${from}&to=${to}${deviceQ}`
+        : null
+      : `range=${range}${deviceQ}`
   useEffect(() => {
     if (!query) return
     getJson(`/api/usage?${query}`).then(setData).catch(setErr)
   }, [query])
+  // The heatmap follows the device filter too — otherwise the calendar would
+  // contradict every other number on the page while a device is selected.
   useEffect(() => {
-    getJson("/api/heatmap").then(setHeat).catch(() => {})
+    getJson(`/api/heatmap${device ? `?device=${encodeURIComponent(device)}` : ""}`)
+      .then(setHeat)
+      .catch(() => {})
+  }, [device])
+  useEffect(() => {
     getJson("/api/relays").then(setRelays).catch(() => {})
     getJson("/api/relays/usage").then(setRelayUsage).catch(() => {})
   }, [])
@@ -143,6 +225,8 @@ export default function TokensPage() {
           </div>
           <Heatmap days={heat} />
         </section>
+
+        <DevicesCard devices={data.devices} selfDevice={data.self_device} selected={device} onSelect={setDevice} />
 
         <section className="up-card p-5">
           <h3 className="mb-3 text-[12px] font-semibold tracking-wide text-oai-gray-500">中转站资产 · 站点报告值</h3>
@@ -227,7 +311,9 @@ export default function TokensPage() {
           )}
 
           <div className="text-center">
-            <div className="text-[12px] font-semibold tracking-[0.15em] text-oai-gray-400">TOTAL TOKENS</div>
+            <div className="text-[12px] font-semibold tracking-[0.15em] text-oai-gray-400">
+              TOTAL TOKENS{device ? ` · ${device}` : ""}
+            </div>
             <div className="mt-1 font-oai text-display">{fmt(data.totals.total_tokens)}</div>
             <div
               className="mt-2 text-[18px] font-bold text-brand-600"
