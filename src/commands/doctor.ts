@@ -5,6 +5,7 @@ import path from "node:path"
 import os from "node:os"
 import { loadConfig } from "../core/config.js"
 import { dataDir, dbPath } from "../core/paths.js"
+import { listAntigravityTranscripts, resolveGeminiHome } from "../collectors/antigravity.js"
 
 function check(label: string, p: string, extra = ""): void {
   const exists = fs.existsSync(p)
@@ -39,6 +40,27 @@ export function runDoctor(): void {
   const codexSessions = path.join(home, ".codex", "sessions")
   check("codex logs", codexSessions, `(${countFiles(codexSessions, ".jsonl")} jsonl)`)
   check("codex title index", path.join(home, ".codex", "session_index.jsonl"))
+
+  // DeepSeek Harness usage lives in TokenLedger's SQLite rollups, not in DSH's
+  // own session files. Report which ledger files exist so a missing collector
+  // (or a machine without DSH) is visible at a glance.
+  const dshHome = process.env.DSH_HOME?.trim() || path.join(home, ".dsh")
+  const ledgers = ["tokenledger-web.sqlite", "tokenledger.sqlite"]
+    .map((f) => path.join(dshHome, f))
+    .filter((p) => fs.existsSync(p))
+  if (ledgers.length > 0) {
+    for (const p of ledgers) check("deepseek ledger", p)
+  } else {
+    console.log(`  ✗ deepseek ledger: none under ${dshHome} (TokenLedger not installed here)`)
+  }
+
+  // Antigravity: only conversations with a transcript.jsonl are readable.
+  const agTranscripts = listAntigravityTranscripts(resolveGeminiHome())
+  if (agTranscripts.length > 0) {
+    console.log(`  ✓ antigravity transcripts: ${agTranscripts.length} under ${resolveGeminiHome()}`)
+  } else {
+    console.log(`  ✗ antigravity transcripts: none under ${resolveGeminiHome()}`)
+  }
 
   console.log("credentials (presence only — contents never printed):")
   const claudeCreds = path.join(home, ".claude", ".credentials.json")

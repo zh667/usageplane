@@ -45,8 +45,56 @@ test("pricing: codex reasoning folds into output (no double charge); unknown mod
   assert.equal(computeRowCost({ model: "totally-unknown-model", input_tokens: 1e6, output_tokens: 0, cached_input_tokens: 0, cache_creation_input_tokens: 0, reasoning_output_tokens: 0 }), 0)
 })
 
-test("limits: parses 5h/7d windows and scoped weekly entries", () => {
-  const windows = parseClaudeUsageBody({
+test("pricing: bare deepseek-flash (TokenLedger SKU) resolves to the v4-flash rates", () => {
+  // TokenLedger stores DSH's fast tier as "deepseek-flash"; without the alias
+  // its 1B+ tokens would silently price at $0.
+  const bare = getModelPricing("deepseek-flash")
+  const canonical = getModelPricing("deepseek-v4-flash")
+  assert.deepEqual(bare, canonical)
+  assert.equal(bare.input, 0.14)
+  assert.equal(bare.output, 0.28)
+  assert.notEqual(bare.input, 0)
+})
+
+test("pricing: deepseek reasoning folds into output (no double charge)", () => {
+  const withReasoning = computeRowCost({
+    tool: "deepseek",
+    model: "deepseek-flash",
+    input_tokens: 0,
+    output_tokens: 1000,
+    cached_input_tokens: 0,
+    cache_creation_input_tokens: 0,
+    reasoning_output_tokens: 999_999,
+  })
+  const withoutReasoning = computeRowCost({
+    tool: "deepseek",
+    model: "deepseek-flash",
+    input_tokens: 0,
+    output_tokens: 1000,
+    cached_input_tokens: 0,
+    cache_creation_input_tokens: 0,
+    reasoning_output_tokens: 0,
+  })
+  assert.equal(withReasoning, withoutReasoning)
+  // Sanity: 1000 output tokens at $0.28/MTok, and reasoning must add nothing.
+  assert.equal(withReasoning, 1000 * 0.28 / 1_000_000)
+})
+
+test("pricing: tools that report reasoning separately still get charged for it", () => {
+  // Claude-style accounting reports reasoning outside output_tokens.
+  const cost = computeRowCost({
+    tool: "claude-code",
+    model: "deepseek-flash",
+    input_tokens: 0,
+    output_tokens: 0,
+    cached_input_tokens: 0,
+    cache_creation_input_tokens: 0,
+    reasoning_output_tokens: 1_000_000,
+  })
+  assert.equal(cost, 1_000_000 * 0.28 / 1_000_000)
+})
+
+test("limits: parses 5h/7d windows and scoped weekly entries", () => {  const windows = parseClaudeUsageBody({
     five_hour: { utilization: 46, resets_at: "2026-08-08T10:00:00Z" },
     seven_day: { utilization: 12, resets_at: "2026-08-13T00:00:00Z" },
     limits: [
@@ -149,4 +197,48 @@ test("hooks: install is idempotent, uninstall preserves foreign hooks", () => {
   const cleaned = JSON.parse(fs.readFileSync(file, "utf8"))
   assert.equal(cleaned.hooks.Stop.length, 1)
   assert.ok(JSON.stringify(cleaned.hooks.Stop[0]).includes("other-tool"))
+})
+
+test("pricing: current Claude 5.x ids resolve to their own list prices (not an older tier)", () => {
+  // Opus 5.5 used to fall through to the claude-opus-5 fuzzy rule ($5/$25).
+  assert.deepEqual(getModelPricing("claude-opus-5-5"), { input: 4, output: 20, cache_read: 0.2, cache_write: 5 })
+  assert.equal(getModelPricing("claude-fable-5-2").input, 8)
+  assert.equal(getModelPricing("claude-fable-5-1").cache_read, 0.25)
+  assert.equal(getModelPricing("claude-haiku-5-5").output, 0.5)
+})
+
+test("pricing: bundled LiteLLM seed prices models the curated table never carries", () => {
+  // Dated Claude ids, older GPT ids and Gemini all come from the seed.
+  assert.equal(getModelPricing("claude-haiku-4-5-20251001").input, 1)
+  assert.equal(getModelPricing("claude-opus-4-6").output, 25)
+  assert.equal(getModelPricing("gpt-5.4").input, 2.5)
+  assert.deepEqual(getModelPricing("gemini-2.5-pro"), { input: 1.25, output: 10, cache_read: 0.125, cache_write: 0 })
+  // provider-prefixed ids resolve via the LiteLLM lookup chain
+  assert.equal(getModelPricing("models/gemini-2.5-pro").input, 1.25)
+})
+
+test("pricing: curated Gemini entries win over LiteLLM substring fallbacks", () => {
+  // Without the curated entry, reverse-substring would price flash-lite as flash ($1.50/$9).
+  assert.equal(getModelPricing("gemini-3.5-flash-lite").input, 0.3)
+  assert.equal(getModelPricing("gemini-4-neon").output, 15)
+  assert.equal(getModelPricing("gemini-3.8-flash").cache_read, 0.075)
+})
+
+test("pricing: GPT-6 family and Codex effort suffixes", () => {
+  assert.deepEqual(getModelPricing("gpt-6-astra"), { input: 10, output: 50, cache_read: 1, cache_write: 10 })
+  assert.equal(getModelPricing("gpt-6.1-sol").cache_read, 0.1)
+  assert.equal(getModelPricing("gpt-6-sol").cache_read, 0.2)
+  assert.deepEqual(getModelPricing("gpt-6-astrahigh"), getModelPricing("gpt-6-astra"))
+  assert.deepEqual(getModelPricing("gpt-5.6-solhigh"), getModelPricing("gpt-5.6-sol"))
+})
+
+test("pricing: placeholder model names never pick up a price by substring", () => {
+  for (const m of ["unknown", "<synthetic>", "", "totally-unknown-model"]) {
+    assert.deepEqual(getModelPricing(m), { input: 0, output: 0, cache_read: 0, cache_write: 0 }, m)
+  }
+})
+
+test("pricing: claude-code display-style ids normalize for lookup only", () => {
+  assert.deepEqual(getModelPricing("claude-opus-4.8", "claude-code"), getModelPricing("claude-opus-4-8"))
+  assert.deepEqual(getModelPricing("anthropic/claude-4.6-opus", "claude-code"), getModelPricing("claude-opus-4-6"))
 })

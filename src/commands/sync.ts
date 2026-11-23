@@ -1,5 +1,7 @@
 import { collectClaudeCode } from "../collectors/claude-code.js"
 import { collectCodex } from "../collectors/codex.js"
+import { collectDeepSeek } from "../collectors/deepseek.js"
+import { collectAntigravity } from "../collectors/antigravity.js"
 import { loadConfig } from "../core/config.js"
 import { dataDir, dbPath } from "../core/paths.js"
 import { allLimits } from "../core/limits.js"
@@ -31,8 +33,18 @@ export async function runSync(opts: { quiet?: boolean } = {}): Promise<void> {
         const n = store.upsertUsage(records)
         log(`codex: ${n} hourly buckets synced`)
         total += n
+      } else if (collector === "deepseek") {
+        const records = await collectDeepSeek({ deviceId: cfg.device })
+        const n = store.upsertUsage(records)
+        log(`deepseek: ${n} daily buckets synced`)
+        total += n
+      } else if (collector === "antigravity") {
+        const records = await collectAntigravity({ deviceId: cfg.device })
+        const n = store.upsertUsage(records)
+        log(`antigravity: ${n} hourly buckets synced`)
+        total += n
       } else if (!opts.quiet) {
-        console.warn(`skipping unknown collector "${collector}" (available: claude-code, codex)`)
+        console.warn(`skipping unknown collector "${collector}" (available: claude-code, codex, deepseek, antigravity)`)
       }
     }
     // Session metadata (titles etc. — never message bodies) is stored so
