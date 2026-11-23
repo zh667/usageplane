@@ -8,6 +8,20 @@ export const PRICING_DATA = {
     "deepseek_v4_pro_pricing_note": "The 2026-05-31 promotional-expiry warning is obsolete: api-docs.deepseek.com/quick_start/pricing verified on 2026-06-10 still lists input $0.435/M, output $0.87/M, cache_read $0.003625/M as the official v4-pro rates (the discount became the list price). Do NOT 'restore' the old 4x rates; re-verify against the official page before any change."
   },
   "exact": {
+    "gpt-6.2-sol": {
+      "input": 2,
+      "output": 10,
+      "cache_read": 0.1,
+      "cache_write": 2,
+      "note": "GPT-6.2 family. developers.openai.com/api/docs/pricing standard tier, short context (<=272K input), fetched 2026-11-23. OpenAI bills no cache-write surcharge, so cache_write = input. Long context (>272K input) is 2x input/cached and 1.5x output and is NOT modeled. Codex may append reasoning effort (e.g. gpt-6.2-solhigh), caught by fuzzy."
+    },
+    "gpt-6.2-astra": {
+      "input": 8,
+      "output": 40,
+      "cache_read": 0.4,
+      "cache_write": 8,
+      "note": "GPT-6.2 family. developers.openai.com/api/docs/pricing standard tier, short context (<=272K input), fetched 2026-11-23. OpenAI bills no cache-write surcharge, so cache_write = input. Long context (>272K input) is 2x input/cached and 1.5x output and is NOT modeled. Codex may append reasoning effort (e.g. gpt-6.2-astrahigh), caught by fuzzy."
+    },
     "gemini-4-carbon": {
       "input": 2,
       "output": 10,
@@ -522,6 +536,14 @@ export const PRICING_DATA = {
     "deepseek-flash": "deepseek-v4-flash"
   },
   "fuzzy": [
+    {
+      "match": "gpt-6.2-sol",
+      "ref": "gpt-6.2-sol"
+    },
+    {
+      "match": "gpt-6.2-astra",
+      "ref": "gpt-6.2-astra"
+    },
     {
       "match": "gemini-4-carbon",
       "ref": "gemini-4-carbon"
