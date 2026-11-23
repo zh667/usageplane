@@ -69,6 +69,7 @@
 - ✅ 设置页（2026-08-07）：Appearance（主题三态/货币/数字格式，实测生效）、Account（设备名+hub 状态+登录占位）、Limits Display（%used/%left 偏好，供 Limits 页用）、版本页脚。语言项有意推迟——UI 未做 i18n 前放一个不生效的选择器是假设置（TT 对齐的例外按"上游有而我们暂缺基建"处理）
 - ✅ 成本估算引擎（2026-08-08）：移植 TT 定价表（67 模型 exact+alias+fuzzy 三级匹配）与 computeRowCost（分列计费、codex reasoning 不重复计费、未知模型计 0）；estimated 与 reported 永不相加
 - ✅ 定价补齐（2026-11-23）：移植 TT 的 LiteLLM 种子快照（2283 个模型，`scripts/port-litellm-seed.mjs` 生成 `src/core/litellm-seed.ts`）和完整查价顺序（curated → LiteLLM 精确 → 别名 → 模糊 → 去推理后缀 → 去厂商前缀 → 反向子串）；新增 Gemini（2.5/3.x/3.5/3.6/3.8/4 系）、Claude 5.x（Fable 5.1/5.2、Opus/Sonnet/Haiku 5.5）、GPT-6 家族官方价；gpt-5.6-sol 改为现价 $4/$20；Opus 5.5 不再误用 Opus 5 价。只用打包快照，不做 TT 的 24h 联网刷新
+- ✅ Antigravity 采集器（2026-11-23）：移植 TT（5c9f575b）的做法——`brain/<id>/.system_generated/logs/transcript.jsonl` 给时间戳与 step，`conversations/<id>.db` 的 gen_metadata protobuf 给实测用量（系统前缀+提问、缓存读、正文输出、思考分列）；新版日志自带的 token 字段只作后备（实测缺系统前缀、输出含思考）。**验收（Windows 真实数据）**：752 次调用中 750 次有数据库记录，四列与 TT 解析器逐列精确相等；余差全部来自 2 次无库记录的调用（TT 按字数估算出 381 输入 token，我们读日志字段约 15 万含缓存）；临时 USAGEPLANE_HOME 连跑两次 sync 结果一致（48 桶）。11-22 之前的 100 个旧会话只有 .pb，上游也不读，无法补历史
 - ✅ hooks 自动采集（2026-08-08）：`usageplane hooks install` 向 Claude Code settings.json 装 Stop 钩子——每次响应结束触发 `sync --quiet`（hub 已绑定则 sync 自动附带 push）；install 幂等、uninstall 保留他人钩子。VPS 已装。Codex notify 钩子已实现并 Windows 实测（含与 TT 的链式共存，见补课清单）
 - ✅ 隐私加固（2026-08-08，回应用户隐私拷问）：会话标题带 `title_source` 溯源——content 衍生（用户首句）的标题**永不出设备**（入库前置空），仅 agent 生成的标题参与 hub 同步；`hub.sync_sessions: false` 可整体关闭会话同步
 - ✅ UI 打磨批次一（2026-08-08，响应用户实测审计 P0/P1）：窄屏 56px 顶栏+汉堡+260px 抽屉导航（侧栏不再吃掉小窗口 216px）；页面标题 48/700→34/600；拆掉全站外层大卡（卡套卡模板感），各页独立卡片模块；emoji 图标全部换成统一 Lucide 线性内联 SVG；导航密度对齐上游 13px/32px；窄屏横向溢出修复（热力图/表格卡内滚动）。**审计定性遵循用户方向：不做 TT 外观复刻，保留双设备 hub+中转站资产核心优势，补信息密度与响应式质感**
@@ -138,3 +139,4 @@ Windows 实机四连验证已跑（2026-08-08），结果与后续动作：
 | 2026-09-01 | 聚合通道保持"hub 绑 127.0.0.1 + SSH 隧道"，隧道改为 Windows 登录计划任务常驻，**不改绑定**：绑到 tailnet 会让写端点（Skills 安装/启停走回环 Host 白名单）在远端页面上降级为只读，而该机 tailscale 常离线；断流是运维问题，用运维手段解决，不动数据面设计 |
 | 2026-09-01 | 设备维度放在 Tokens 页而非独立页（用户定）：上游 TT 的设备卡就在 Dashboard 左栏（`DevicePage` 是 OAuth 设备流，不是用量页），且"合计 + 点开单设备"一屏内切换比跳页更贴合"看两台机器总量"的原始需求；成本仍按 (device,tool,model) 分组定价后归并，绝不从设备 `total_tokens` 反推 |
 | 2026-11-23 | 定价移植 TT 的 LiteLLM 层但**只用打包快照、不联网刷新**：本地优先、价格变化可审计（每次重新移植是一次提交）；代价是新模型要等补 curated 条目或重新移植快照。按"当前标价"估算历史用量（不做按日期分段的价格表），价格调整会回溯改变历史估算——estimated 本就是标价等值，不是账单 |
+| 2026-11-23 | Antigravity 无实测用量的调用**跳过不估算**（与 TT 有意分歧）：TT 退回按字数估算（中文 1 字 1 token、其他 4 字符 1 token，不含缓存），实测把一次约 15 万 token 的调用估成 381；把估算混进实测列会让口径不可信。项目归属留空（日志不带 cwd） |
