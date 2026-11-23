@@ -205,7 +205,9 @@ export function sourceKindFor(row: { provider?: unknown; site?: unknown }): Sour
 /** Absolute cwd -> project name, matching the Claude/Codex collectors. */
 export function projectName(project: string | null | undefined): string {
   if (typeof project !== "string" || !project.trim()) return ""
-  return path.basename(project.trim())
+  // path.win32.basename splits on both "\\" and "/", so a Windows cwd stored in
+  // the ledger yields the same project name whichever OS reads it.
+  return path.win32.basename(project.trim())
 }
 
 /** A YYYY-MM-DD local calendar date -> 00:00 UTC of that date (ISO), or null. */
