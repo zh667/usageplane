@@ -227,6 +227,8 @@ test("pricing: curated Gemini entries win over LiteLLM substring fallbacks", () 
 test("pricing: GPT-6 family and Codex effort suffixes", () => {
   assert.deepEqual(getModelPricing("gpt-6-astra"), { input: 10, output: 50, cache_read: 1, cache_write: 10 })
   assert.equal(getModelPricing("gpt-6.1-sol").cache_read, 0.1)
+  assert.deepEqual(getModelPricing("gpt-6.2-sol"), { input: 2, output: 10, cache_read: 0.1, cache_write: 2 })
+  assert.equal(getModelPricing("gpt-6.2-astrahigh").output, 40)
   assert.equal(getModelPricing("gpt-6-sol").cache_read, 0.2)
   assert.deepEqual(getModelPricing("gpt-6-astrahigh"), getModelPricing("gpt-6-astra"))
   assert.deepEqual(getModelPricing("gpt-5.6-solhigh"), getModelPricing("gpt-5.6-sol"))
