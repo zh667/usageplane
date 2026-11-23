@@ -120,8 +120,22 @@ function normalizeClaudeModel(model: string): string {
   return m
 }
 
+/**
+ * Antigravity routes Claude/GPT through Google and names them with dotted
+ * minors (`claude-opus-4.8`). Ported from TokenTracker normalizeAntigravityModel
+ * (MIT), minus its gemini-3.x -> 2.5 price fallback: Gemini 3.x/4 ids now have
+ * real entries, and that fallback would under-price them.
+ */
+function normalizeAntigravityPricingModel(model: string): string {
+  const m = model.trim().toLowerCase()
+  if (m.startsWith("claude-")) return normalizeClaudeModel(m)
+  if (m.startsWith("gpt-oss-120b")) return "antigravity-gpt-oss-120b"
+  return m
+}
+
 const SOURCE_NORMALIZERS: Record<string, (m: string) => string> = {
   "claude-code": normalizeClaudeModel,
+  antigravity: normalizeAntigravityPricingModel,
 }
 
 export function getModelPricing(model: string, tool?: string): ModelPricing {

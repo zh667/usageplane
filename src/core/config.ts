@@ -134,7 +134,7 @@ export function starterConfigYaml(device: string): string {
   return `# UsagePlane configuration — see docs/ARCHITECTURE.md
 device: ${device}
 
-# Enabled collectors. Available: claude-code, codex, deepseek
+# Enabled collectors. Available: claude-code, codex, deepseek, antigravity
 collectors:
   - claude-code
 

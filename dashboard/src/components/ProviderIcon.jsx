@@ -70,6 +70,7 @@ const ICONS = {
   codex: CodexIcon,
   cursor: CursorIcon,
   gemini: GeminiIcon,
+  antigravity: GeminiIcon,
   deepseek: DeepSeekIcon,
   agents: SharedIcon,
 }
@@ -81,6 +82,7 @@ export const BRAND_CLASS = {
   codex: "text-oai-black dark:text-oai-white",
   cursor: "text-oai-black dark:text-oai-white",
   gemini: "text-[#4285F4]",
+  antigravity: "text-[#4285F4]",
   deepseek: "text-[#4D6BFE]",
   agents: "text-oai-gray-500",
 }
@@ -91,6 +93,7 @@ export const PROVIDER_LABELS = {
   codex: "Codex",
   cursor: "Cursor",
   gemini: "Gemini",
+  antigravity: "Antigravity",
   deepseek: "DeepSeek",
   agents: "Shared",
 }

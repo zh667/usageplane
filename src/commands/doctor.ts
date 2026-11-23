@@ -5,6 +5,7 @@ import path from "node:path"
 import os from "node:os"
 import { loadConfig } from "../core/config.js"
 import { dataDir, dbPath } from "../core/paths.js"
+import { listAntigravityTranscripts, resolveGeminiHome } from "../collectors/antigravity.js"
 
 function check(label: string, p: string, extra = ""): void {
   const exists = fs.existsSync(p)
@@ -51,6 +52,14 @@ export function runDoctor(): void {
     for (const p of ledgers) check("deepseek ledger", p)
   } else {
     console.log(`  ✗ deepseek ledger: none under ${dshHome} (TokenLedger not installed here)`)
+  }
+
+  // Antigravity: only conversations with a transcript.jsonl are readable.
+  const agTranscripts = listAntigravityTranscripts(resolveGeminiHome())
+  if (agTranscripts.length > 0) {
+    console.log(`  ✓ antigravity transcripts: ${agTranscripts.length} under ${resolveGeminiHome()}`)
+  } else {
+    console.log(`  ✗ antigravity transcripts: none under ${resolveGeminiHome()}`)
   }
 
   console.log("credentials (presence only — contents never printed):")
