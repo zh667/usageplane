@@ -10,7 +10,7 @@ A local-first control plane for AI coding usage, subscription limits, and relay 
 
 ## What it will do
 
-- **AI 编程用量**：采集 Claude Code、Codex CLI 等工具在各设备（含 VPS）上的 token 用量、模型、项目维度统计，以及官方订阅额度窗口。
+- **AI 编程用量**：采集 Claude Code、Codex CLI、DeepSeek Harness 等工具在各设备（含 VPS）上的 token 用量、模型、项目维度统计，以及官方订阅额度窗口。
 - **中转站资产**：统一管理多个 new-api / one-api 家族中转站的账户、Key、余额、消费、模型价格与可用性。
 - **统一视图，口径分明**：两类数据并列展示，估算成本（estimated）与实际扣费（reported）永不混算。请求级归因是可选高级功能，不是默认假设。
 
@@ -20,7 +20,7 @@ A local-first control plane for AI coding usage, subscription limits, and relay 
 src/
 ├── cli.ts          CLI 入口
 ├── commands/       init / sync / serve / status
-├── collectors/     客户端日志采集器（移植自 TokenTracker, MIT）
+├── collectors/     客户端日志采集器（移植自 TokenTracker, MIT；deepseek 读 TokenLedger）
 ├── relays/         中转站适配器（参考 all-api-hub, AGPL-3.0）
 ├── core/           统一数据模型与本地存储（~/.usageplane）
 └── server/         本地 HTTP API
@@ -57,6 +57,18 @@ powershell -ExecutionPolicy Bypass -File .\scripts\windows-tunnel.ps1 -Status   
 ```
 
 本机若已有 `usageplane serve` 占着 7690，用 `-LocalPort 7691` 换个端口再开浏览器。
+
+### 按需启动（不用常驻任务）
+
+不想让隧道/面板常驻、只在要用时拉起来：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\usageplane-on.ps1    # 隧道 + 本地面板 + 一次 sync
+powershell -ExecutionPolicy Bypass -File .\scripts\usageplane-off.ps1   # 全部停掉（VPS hub 不动）
+```
+
+`usageplane-on.ps1` 会自检：端口被占但不转发时清掉僵尸隧道再重连，sync 失败自动重试一次。
+`-NoSync` 可跳过同步。
 
 ## Acknowledgements
 

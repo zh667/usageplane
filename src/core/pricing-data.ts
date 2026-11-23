@@ -139,7 +139,8 @@ export const PRICING_DATA = {
       "input": 0.14,
       "output": 0.28,
       "cache_read": 0.0028,
-      "cache_write": 0.14
+      "cache_write": 0.14,
+      "note": "DeepSeek's fast tier. TokenLedger (DSH) stores this SKU under the bare name \"deepseek-flash\", which the alias table maps here — the bare name is the same tier, NOT an unpriced model. cache_write = input follows DeepSeek's no-write-surcharge cache model."
     },
     "deepseek-v4-pro": {
       "input": 0.435,
@@ -398,7 +399,8 @@ export const PRICING_DATA = {
     }
   },
   "alias": {
-    "auto": "composer-1"
+    "auto": "composer-1",
+    "deepseek-flash": "deepseek-v4-flash"
   },
   "fuzzy": [
     {

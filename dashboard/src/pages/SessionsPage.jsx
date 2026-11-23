@@ -10,6 +10,7 @@ const TOOLS = [
   ["all", "All"],
   ["claude-code", "Claude Code"],
   ["codex", "Codex"],
+  ["deepseek", "DeepSeek"],
 ]
 const AGES = [
   ["all", "All"],
@@ -143,11 +144,7 @@ export default function SessionsPage() {
             key={`${s.tool}:${s.id}`}
             className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-oai-gray-100 py-3.5 last:border-0 dark:border-oai-gray-800/60"
           >
-            <ProviderIcon
-              id={s.tool === "codex" ? "codex" : "claude"}
-              size={20}
-              className={BRAND_CLASS[s.tool === "codex" ? "codex" : "claude"]}
-            />
+            <ProviderIcon id={s.tool} size={20} className={BRAND_CLASS[s.tool]} />
             {/* basis forces the stats+copy group onto its own row below ~420px */}
             <div className="min-w-0 flex-1 basis-[220px]">
               <div className="flex items-center gap-2">

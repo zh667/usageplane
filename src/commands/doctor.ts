@@ -40,6 +40,19 @@ export function runDoctor(): void {
   check("codex logs", codexSessions, `(${countFiles(codexSessions, ".jsonl")} jsonl)`)
   check("codex title index", path.join(home, ".codex", "session_index.jsonl"))
 
+  // DeepSeek Harness usage lives in TokenLedger's SQLite rollups, not in DSH's
+  // own session files. Report which ledger files exist so a missing collector
+  // (or a machine without DSH) is visible at a glance.
+  const dshHome = process.env.DSH_HOME?.trim() || path.join(home, ".dsh")
+  const ledgers = ["tokenledger-web.sqlite", "tokenledger.sqlite"]
+    .map((f) => path.join(dshHome, f))
+    .filter((p) => fs.existsSync(p))
+  if (ledgers.length > 0) {
+    for (const p of ledgers) check("deepseek ledger", p)
+  } else {
+    console.log(`  ✗ deepseek ledger: none under ${dshHome} (TokenLedger not installed here)`)
+  }
+
   console.log("credentials (presence only — contents never printed):")
   const claudeCreds = path.join(home, ".claude", ".credentials.json")
   check("claude oauth", claudeCreds)

@@ -45,8 +45,56 @@ test("pricing: codex reasoning folds into output (no double charge); unknown mod
   assert.equal(computeRowCost({ model: "totally-unknown-model", input_tokens: 1e6, output_tokens: 0, cached_input_tokens: 0, cache_creation_input_tokens: 0, reasoning_output_tokens: 0 }), 0)
 })
 
-test("limits: parses 5h/7d windows and scoped weekly entries", () => {
-  const windows = parseClaudeUsageBody({
+test("pricing: bare deepseek-flash (TokenLedger SKU) resolves to the v4-flash rates", () => {
+  // TokenLedger stores DSH's fast tier as "deepseek-flash"; without the alias
+  // its 1B+ tokens would silently price at $0.
+  const bare = getModelPricing("deepseek-flash")
+  const canonical = getModelPricing("deepseek-v4-flash")
+  assert.deepEqual(bare, canonical)
+  assert.equal(bare.input, 0.14)
+  assert.equal(bare.output, 0.28)
+  assert.notEqual(bare.input, 0)
+})
+
+test("pricing: deepseek reasoning folds into output (no double charge)", () => {
+  const withReasoning = computeRowCost({
+    tool: "deepseek",
+    model: "deepseek-flash",
+    input_tokens: 0,
+    output_tokens: 1000,
+    cached_input_tokens: 0,
+    cache_creation_input_tokens: 0,
+    reasoning_output_tokens: 999_999,
+  })
+  const withoutReasoning = computeRowCost({
+    tool: "deepseek",
+    model: "deepseek-flash",
+    input_tokens: 0,
+    output_tokens: 1000,
+    cached_input_tokens: 0,
+    cache_creation_input_tokens: 0,
+    reasoning_output_tokens: 0,
+  })
+  assert.equal(withReasoning, withoutReasoning)
+  // Sanity: 1000 output tokens at $0.28/MTok, and reasoning must add nothing.
+  assert.equal(withReasoning, 1000 * 0.28 / 1_000_000)
+})
+
+test("pricing: tools that report reasoning separately still get charged for it", () => {
+  // Claude-style accounting reports reasoning outside output_tokens.
+  const cost = computeRowCost({
+    tool: "claude-code",
+    model: "deepseek-flash",
+    input_tokens: 0,
+    output_tokens: 0,
+    cached_input_tokens: 0,
+    cache_creation_input_tokens: 0,
+    reasoning_output_tokens: 1_000_000,
+  })
+  assert.equal(cost, 1_000_000 * 0.28 / 1_000_000)
+})
+
+test("limits: parses 5h/7d windows and scoped weekly entries", () => {  const windows = parseClaudeUsageBody({
     five_hour: { utilization: 46, resets_at: "2026-08-08T10:00:00Z" },
     seven_day: { utilization: 12, resets_at: "2026-08-13T00:00:00Z" },
     limits: [

@@ -65,10 +65,27 @@ export interface CostRow {
   reasoning_output_tokens: number
 }
 
-/** USD estimate for one row. Codex folds reasoning into output — don't double-charge. */
+/**
+ * Tools whose `reasoning_output_tokens` is ALREADY a subset of
+ * `output_tokens` — charging it again would double-bill those tokens.
+ *
+ * Codex/EveryCode: token_count output includes reasoning.
+ * deepseek: DeepSeek's API reports `reasoning_tokens` inside
+ *   `completion_tokens_details`, i.e. as part of completion (output).
+ *   Verified empirically on DSH/TokenLedger rows: reasoning never exceeds
+ *   output and averages ~43% of it, consistent with a subset. Our own
+ *   daily collector also folds reasoning into total_tokens for the same
+ *   reason (see collectors/deepseek.ts).
+ *
+ * Claude-style tools are NOT listed: there reasoning is reported separately
+ * and is not included in output_tokens.
+ */
+const REASONING_INCLUDED_IN_OUTPUT = new Set(["codex", "every-code", "deepseek"])
+
+/** USD estimate for one row. Never double-charge reasoning already inside output. */
 export function computeRowCost(row: CostRow): number {
   const pricing = getModelPricing(row.model)
-  const reasoningIncludedInOutput = row.tool === "codex" || row.tool === "every-code"
+  const reasoningIncludedInOutput = REASONING_INCLUDED_IN_OUTPUT.has(row.tool ?? "")
   const reasoningCost = reasoningIncludedInOutput ? 0 : (row.reasoning_output_tokens || 0) * pricing.output
   return (
     ((row.input_tokens || 0) * pricing.input +

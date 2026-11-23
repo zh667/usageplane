@@ -36,9 +36,17 @@ function GeminiIcon({ size = 16, className = "" }) {
   )
 }
 
-/** Shared/agents dir and unknown providers get neutral marks, never a broken image. */
-function SharedIcon({ size = 16, className = "" }) {
+// DeepSeek whale mark (official mono glyph; currentColor like the rest).
+function DeepSeekIcon({ size = 16, className = "" }) {
   return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M23.748 4.19c-.31-.16-.44.14-.6.32-.06.07-.11.15-.19.21-.66.55-1.41.72-2.22.54-.86-.19-1.6-.02-2.26.55-.17.14-.33.3-.52.42a3.4 3.4 0 01-4.2-.34c-.62-.57-1.31-.93-2.16-1-.9-.07-1.69.19-2.39.72-.28.21-.55.45-.87.6a4.66 4.66 0 01-1.94.42c-1.42.02-2.6.66-3.52 1.73-.9 1.05-1.27 2.3-1.19 3.66.09 1.53.72 2.83 1.85 3.88 1.18 1.1 2.6 1.71 4.22 1.83 1.72.13 3.28-.2 4.63-1.2.77-.57 1.42-1.26 1.95-2.06.63.42 1.34.63 2.13.63 1.09 0 2.02-.4 2.79-1.18.86-.87 1.25-1.92 1.16-3.13-.06-.86-.36-1.62-.87-2.29a5.6 5.6 0 00-2.13-1.62c.2-.72.24-1.44.11-2.16-.16-.85-.56-1.56-1.2-2.13a3.9 3.9 0 00-1.06-.66zm-2.9 12.4c-.9.7-1.93 1.05-3.08 1.05-1.27 0-2.36-.4-3.27-1.2-.83-.73-1.29-1.66-1.38-2.77-.09-1.13.25-2.11 1.02-2.92.78-.83 1.76-1.24 2.93-1.24.98 0 1.86.3 2.62.9.86.68 1.36 1.57 1.49 2.67.13 1.13-.2 2.13-.99 3l-.34.31zm-4.13-3.3a.95.95 0 10-1.9 0 .95.95 0 001.9 0zm3.9 0a.72.72 0 10-1.44 0 .72.72 0 001.44 0z" />
+    </svg>
+  )
+}
+
+/** Shared/agents dir and unknown providers get neutral marks, never a broken image. */
+function SharedIcon({ size = 16, className = "" }) {  return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
       <path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z" />
       <path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65" />
@@ -62,6 +70,7 @@ const ICONS = {
   codex: CodexIcon,
   cursor: CursorIcon,
   gemini: GeminiIcon,
+  deepseek: DeepSeekIcon,
   agents: SharedIcon,
 }
 
@@ -72,6 +81,7 @@ export const BRAND_CLASS = {
   codex: "text-oai-black dark:text-oai-white",
   cursor: "text-oai-black dark:text-oai-white",
   gemini: "text-[#4285F4]",
+  deepseek: "text-[#4D6BFE]",
   agents: "text-oai-gray-500",
 }
 
@@ -81,6 +91,7 @@ export const PROVIDER_LABELS = {
   codex: "Codex",
   cursor: "Cursor",
   gemini: "Gemini",
+  deepseek: "DeepSeek",
   agents: "Shared",
 }
 
