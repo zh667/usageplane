@@ -18,7 +18,7 @@ UsagePlane — a local-first control plane for AI coding usage, subscription lim
 | 订阅限额 | `src/core/limits.ts`（缓存+退避是载荷级，端点与 Claude Code 共享配额）|
 | 会话/技能/限额跨设备同步 | `device_state`：`sync.ts` 写入、`push/pull` 快照语义传播 |
 | Skills 扫描/链接管理/发现安装 | `src/core/skills.ts` / `skill-links.ts` / `skill-discover.ts` |
-| 定价 | `src/core/pricing-data.ts` + `computeRowCost`（分列计费）|
+| 定价 | 手工条目 `src/core/pricing-data.ts`（优先）+ LiteLLM 快照 `src/core/litellm-seed.ts`（生成：`scripts/port-litellm-seed.mjs`，别手改）+ `computeRowCost`（分列计费）|
 | 面板页面 | `dashboard/src/pages/`（oai 设计令牌在 `tailwind.config.cjs`）|
 
 ### 常用命令与双机验证

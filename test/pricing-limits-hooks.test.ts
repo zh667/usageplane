@@ -198,3 +198,47 @@ test("hooks: install is idempotent, uninstall preserves foreign hooks", () => {
   assert.equal(cleaned.hooks.Stop.length, 1)
   assert.ok(JSON.stringify(cleaned.hooks.Stop[0]).includes("other-tool"))
 })
+
+test("pricing: current Claude 5.x ids resolve to their own list prices (not an older tier)", () => {
+  // Opus 5.5 used to fall through to the claude-opus-5 fuzzy rule ($5/$25).
+  assert.deepEqual(getModelPricing("claude-opus-5-5"), { input: 4, output: 20, cache_read: 0.2, cache_write: 5 })
+  assert.equal(getModelPricing("claude-fable-5-2").input, 8)
+  assert.equal(getModelPricing("claude-fable-5-1").cache_read, 0.25)
+  assert.equal(getModelPricing("claude-haiku-5-5").output, 0.5)
+})
+
+test("pricing: bundled LiteLLM seed prices models the curated table never carries", () => {
+  // Dated Claude ids, older GPT ids and Gemini all come from the seed.
+  assert.equal(getModelPricing("claude-haiku-4-5-20251001").input, 1)
+  assert.equal(getModelPricing("claude-opus-4-6").output, 25)
+  assert.equal(getModelPricing("gpt-5.4").input, 2.5)
+  assert.deepEqual(getModelPricing("gemini-2.5-pro"), { input: 1.25, output: 10, cache_read: 0.125, cache_write: 0 })
+  // provider-prefixed ids resolve via the LiteLLM lookup chain
+  assert.equal(getModelPricing("models/gemini-2.5-pro").input, 1.25)
+})
+
+test("pricing: curated Gemini entries win over LiteLLM substring fallbacks", () => {
+  // Without the curated entry, reverse-substring would price flash-lite as flash ($1.50/$9).
+  assert.equal(getModelPricing("gemini-3.5-flash-lite").input, 0.3)
+  assert.equal(getModelPricing("gemini-4-neon").output, 15)
+  assert.equal(getModelPricing("gemini-3.8-flash").cache_read, 0.075)
+})
+
+test("pricing: GPT-6 family and Codex effort suffixes", () => {
+  assert.deepEqual(getModelPricing("gpt-6-astra"), { input: 10, output: 50, cache_read: 1, cache_write: 10 })
+  assert.equal(getModelPricing("gpt-6.1-sol").cache_read, 0.1)
+  assert.equal(getModelPricing("gpt-6-sol").cache_read, 0.2)
+  assert.deepEqual(getModelPricing("gpt-6-astrahigh"), getModelPricing("gpt-6-astra"))
+  assert.deepEqual(getModelPricing("gpt-5.6-solhigh"), getModelPricing("gpt-5.6-sol"))
+})
+
+test("pricing: placeholder model names never pick up a price by substring", () => {
+  for (const m of ["unknown", "<synthetic>", "", "totally-unknown-model"]) {
+    assert.deepEqual(getModelPricing(m), { input: 0, output: 0, cache_read: 0, cache_write: 0 }, m)
+  }
+})
+
+test("pricing: claude-code display-style ids normalize for lookup only", () => {
+  assert.deepEqual(getModelPricing("claude-opus-4.8", "claude-code"), getModelPricing("claude-opus-4-8"))
+  assert.deepEqual(getModelPricing("anthropic/claude-4.6-opus", "claude-code"), getModelPricing("claude-opus-4-6"))
+})

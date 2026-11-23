@@ -11,7 +11,7 @@
 | 多工具采集器（29 个） | Claude Code/Codex/Cursor/Gemini/Copilot… | ✅ 2 个（claude-code、codex）；按需求逐个移植，`port-collector` skill 已固化流程 | 持续 |
 | 本地 dashboard | localhost 网页，token/模型/项目统计 | ✅ 最小版；页面丰富度对齐见下面各行 | v0.1 |
 | 云端多设备聚合 | device-login → sync 自动上传 → 官网随处看 | 🔨 hub-push 已通（SSH 档）；官方托管档+link 命令待做 | v0.3 |
-| 成本估算（estimated cost） | 按官方单价估算美元成本，含缓存价差 | ⬜ 现在只显示 token 量；需移植定价表。铁律：estimated 与中转站 reported 永不相加 | v0.4 |
+| 成本估算（estimated cost） | 按官方单价估算美元成本，含缓存价差 | ✅ curated 表 + LiteLLM 打包快照，查价顺序同 TT matcher（不做 24h 联网刷新）。铁律：estimated 与中转站 reported 永不相加 | v0.4 |
 | 订阅额度窗口 | Claude Max/Pro 5h/周窗口、13 家 provider 限额 | ⬜ | v0.4 |
 | 活动热力图 | GitHub 风格年度格子图 | ⬜ dashboard 对齐项 | v0.4 |
 | 会话/项目归属 | git 仓库级项目识别 | ✅ 简化版（cwd basename）；对齐 git-root 识别 | v0.4 |
